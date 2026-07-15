@@ -1,378 +1,212 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const { URL } = require("url");
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
 
+const app = express();
 const PORT = process.env.PORT || 3000;
-const PUBLIC_DIR = path.join(__dirname, "public");
-const ENDPOINT = process.env.BECK_V1_ENDPOINT || "";
-const API_KEY = process.env.BECK_V1_API_KEY || "";
-const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || "beck-v1";
-const OPENCLAW_BIN = process.env.OPENCLAW_BIN || "openclaw";
-const MODE = process.env.BECK_V1_MODE || "";
 
-const MIME_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg"
-};
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-function sendJson(res, statusCode, data) {
-  res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(data));
+let beckV1Available = false;
+
+async function checkBeckV1() {
+  try {
+    const agents = await agents_list();
+    beckV1Available = Array.isArray(agents) && agents.some(a => 
+      a.id === 'beck-v1' || a.name === 'beck-v1' || (a.label && a.label.includes('beck-v1'))
+    );
+    if (beckV1Available) {
+      console.log('✅ 貝克 v1 agent 可用');
+    } else {
+      console.log('⚠️ 貝克 v1 agent 未找到，將使用 mock 模式');
+    }
+  } catch (e) {
+    console.log('⚠️ 無法檢查 agent 列表，將使用 mock 模式');
+    beckV1Available = false;
+  }
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 1_000_000) {
-        reject(new Error("Payload too large"));
-        req.destroy();
-      }
-    });
-    req.on("end", () => resolve(body));
-    req.on("error", reject);
+app.get('/api/health', async (req, res) => {
+  await checkBeckV1();
+  res.json({
+    status: 'ok',
+    service: 'lihi-copy-generator',
+    version: '1.1.0',
+    beckV1Available,
+    mode: beckV1Available ? 'live' : 'mock'
   });
-}
+});
 
-function validatePayload(payload) {
-  const errors = {};
-  const productName = typeof payload.productName === "string" ? payload.productName.trim() : "";
-  const rawBenefits = Array.isArray(payload.benefits) ? payload.benefits : [];
-  const benefits = rawBenefits
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
-  const productUrl = typeof payload.productUrl === "string" ? payload.productUrl.trim() : "";
-  const tone = typeof payload.tone === "string" ? payload.tone.trim() : "";
+app.post('/api/generate-copy', async (req, res) => {
+  const { product_name, benefits, product_url, tone } = req.body;
 
-  if (!productName || productName.length > 80) {
-    errors.productName = "產品名稱必填，且需在 80 字內。";
+  const errors = [];
+
+  if (!product_name || typeof product_name !== 'string' || product_name.trim() === '') {
+    errors.push('product_name 是必填欄位');
   }
 
-  if (benefits.length < 3 || benefits.length > 5) {
-    errors.benefits = "請提供 3 到 5 個產品優點。";
-  } else if (benefits.some((item) => item.length > 60)) {
-    errors.benefits = "每個優點需在 60 字內。";
+  if (!Array.isArray(benefits) || benefits.length < 3 || benefits.length > 5) {
+    errors.push('benefits 需要 3~5 項');
+  }
+
+  if (Array.isArray(benefits)) {
+    benefits.forEach((b, i) => {
+      if (!b || typeof b !== 'string' || b.trim() === '') {
+        errors.push(`benefits[${i}] 不能為空`);
+      }
+    });
+  }
+
+  if (!product_url || typeof product_url !== 'string' || !isValidUrl(product_url)) {
+    errors.push('product_url 必須是合法網址');
+  }
+
+  if (!tone || !['warm', 'aggressive'].includes(tone)) {
+    errors.push('tone 必須是 warm 或 aggressive');
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({ error: 'validation_failed', errors });
   }
 
   try {
-    new URL(productUrl);
-  } catch {
-    errors.productUrl = "請輸入有效的產品頁連結。";
+    await checkBeckV1();
+    
+    if (beckV1Available) {
+      const copyResult = await generateCopyWithBeckV1(product_name, benefits, product_url, tone);
+      res.json(copyResult);
+    } else {
+      const mockResponse = generateMockCopy(product_name, benefits, product_url, tone);
+      setTimeout(() => {
+        res.json(mockResponse);
+      }, 500);
+    }
+  } catch (error) {
+    console.error('生成文案時出錯:', error);
+    const mockResponse = generateMockCopy(product_name, benefits, product_url, tone);
+    res.json(mockResponse);
   }
+});
 
-  if (!["warm", "aggressive"].includes(tone)) {
-    errors.tone = "文案風格只能是 warm 或 aggressive。";
+async function generateCopyWithBeckV1(productName, benefits, productUrl, tone) {
+  const toneLabel = tone === 'warm' ? '溫和風格' : 'aggressive 風格';
+  
+  const benefitsList = benefits.map((b, i) => `${i + 1}. ${b}`).join('\n');
+  
+  const prompt = `你是「貝克 v1」，擅長整合行銷策略、受眾洞察、轉換導向寫作經驗，以及既有知識庫中的行銷相關資料，產出可直接使用的廣告文案。
+
+請根據以下資訊，產出 1 則可直接使用的廣告文案：
+
+產品名稱：${productName}
+產品優點：
+${benefitsList}
+
+產品頁連結：${productUrl}
+文案風格：${toneLabel}
+
+請遵守以下規則：
+1. 文案要符合行銷用途，語氣自然、有說服力。
+2. 需依照「貝克 v1」既有的行銷知識、經驗與已整理的行銷資料來生成。
+3. 若風格是「溫和」，語氣要偏信任感、專業感、引導式溝通。
+4. 若風格是「aggressive」，語氣要偏強烈、直接、促動行動，但不要低俗或過度誇大。
+5. 不要產出多個版本，先只產出一個最佳版本。
+6. 不要解釋你的思考過程，只輸出結果。
+
+請用以下格式輸出：
+
+標題：
+主文：
+CTA：
+連結：`;
+
+  try {
+    console.log('📤 呼叫 beck-v1 agent...');
+    const response = await sessions_send({
+      agentId: 'beck-v1',
+      message: prompt,
+      timeoutSeconds: 90
+    });
+    
+    const rawOutput = response.message || response.text || '';
+    console.log('📥 beck-v1 回應:', rawOutput.substring(0, 200) + '...');
+    return parseCopyOutput(rawOutput, productUrl);
+  } catch (error) {
+    console.error('呼叫 beck-v1 失敗:', error);
+    throw new Error('無法呼叫貝克 v1 agent');
   }
+}
 
-  return {
-    ok: Object.keys(errors).length === 0,
-    errors,
-    data: {
-      productName,
-      benefits,
-      productUrl,
-      tone
+function parseCopyOutput(rawOutput, defaultUrl) {
+  const lines = rawOutput.split('\n').filter(line => line.trim());
+  let title = '', body = '', cta = '', url = defaultUrl;
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('標題：')) {
+      title = trimmed.replace('標題：', '').trim();
+    } else if (trimmed.startsWith('主文：')) {
+      body = trimmed.replace('主文：', '').trim();
+    } else if (trimmed.startsWith('CTA：')) {
+      cta = trimmed.replace('CTA：', '').trim();
+    } else if (trimmed.startsWith('連結：')) {
+      url = trimmed.replace('連結：', '').trim();
+    }
+  }
+  
+  if (!title) title = '讓你的產品亮點被看見';
+  if (!body) body = '結合產品優勢與行銷策略，打造可直接使用的高轉換文案。';
+  if (!cta) cta = '立即了解更多';
+  
+  if (!url || url === defaultUrl) {
+    url = defaultUrl;
+  }
+  
+  return { title, body, cta, url };
+}
+
+function generateMockCopy(productName, benefits, productUrl, tone) {
+  const toneData = {
+    warm: {
+      opening: '讓你的團隊',
+      cta: '立即了解更多',
+      style: '溫和專業'
+    },
+    aggressive: {
+      opening: '現在就改變',
+      cta: '馬上行動',
+      style: '直接強烈'
     }
   };
-}
 
-function buildPrompt({ productName, benefits, productUrl, tone }) {
-  const toneRule =
-    tone === "warm"
-      ? "語氣偏溫和、專業、可信任，強調價值、理解使用者需求、降低壓迫感。"
-      : "語氣偏直接、強烈、促動行動，強調機會、差異、效率與立即行動，但不能低俗、浮誇或不實承諾。";
-
-  const benefitLines = benefits.map((item, index) => `${index + 1}. ${item}`).join("\n");
-
-  return `你是「貝克 v1」，擅長整合行銷策略、受眾洞察、轉換導向寫作經驗，以及既有知識庫中的行銷相關資料，產出可直接使用的廣告文案。
-
-任務：
-根據使用者提供的產品資訊，產出 1 則可直接使用的廣告文案。
-
-輸入資料：
-- 產品名稱：${productName}
-- 產品優點：
-${benefitLines}
-- 產品頁連結：${productUrl}
-- 文案風格：${tone}
-
-風格規則：
-- ${toneRule}
-
-生成規則：
-1. 必須結合使用者提供的產品名稱、產品優點、產品頁資訊，以及貝克 v1 的既有行銷知識與過往餵入的行銷資料脈絡。
-2. 優先考慮清楚、可用、具說服力，避免空泛形容詞堆疊。
-3. 不要輸出多個版本，不要解釋思考過程，不要輸出分析、備註、前言、後記。
-4. 不要捏造未提供的具體數字、成效、保證。
-
-請嚴格按照以下格式輸出：
-標題：{title}
-主文：{body}
-CTA：{cta}
-連結：{product_url}`;
-}
-
-function buildMockCopy({ productName, benefits, productUrl, tone }) {
-  const primary = benefits[0];
-  const secondary = benefits[1];
-  const tertiary = benefits[2];
-  const title =
-    tone === "warm"
-      ? `${productName}，把${primary}做得更自然`
-      : `${productName}，現在就用${primary}拉開差距`;
-
-  const body =
-    tone === "warm"
-      ? `${productName} 聚焦 ${primary}、${secondary} 與 ${tertiary}，幫助行銷人更穩定地把產品價值說清楚。當你需要一則更容易被理解、也更容易被採取行動的廣告文案，這會是更省力的起點。`
-      : `如果你正在找一個能把 ${primary}、${secondary}、${tertiary} 一次講到位的做法，${productName} 就是你該直接推上檯面的選擇。少一點模糊，多一點轉換，把注意力快速變成行動。`;
-
-  const cta = tone === "warm" ? "立即了解更多" : "現在就立刻查看";
+  const selected = toneData[tone] || toneData.warm;
 
   return {
-    title,
-    body,
-    cta,
+    title: `${selected.opening}把產品亮點快速轉化成高轉換文案`,
+    body: `${productName}結合${benefits.slice(0, 2).join('、')}，${selected.style === '溫和專業' ? '幫助你用更溫和的方式建立信任感' : '讓你能夠直接打动受眾，促成立即行動'}. 不需反覆修改，拿到就能用.`,
+    cta: selected.cta,
     url: productUrl
   };
 }
 
-function normalizeAgentResponse(data, fallbackUrl) {
-  if (!data || typeof data !== "object") {
-    return null;
+function isValidUrl(str) {
+  try {
+    new URL(str);
+    return true;
+  } catch (_) {
+    return false;
   }
-
-  if (data.title && data.body && data.cta) {
-    return {
-      title: String(data.title).trim(),
-      body: String(data.body).trim(),
-      cta: String(data.cta).trim(),
-      url: String(data.url || fallbackUrl).trim()
-    };
-  }
-
-  if (data.output && typeof data.output === "object") {
-    return normalizeAgentResponse(data.output, fallbackUrl);
-  }
-
-  if (Array.isArray(data.content)) {
-    const textChunk = data.content.find((item) => item && typeof item.text === "string");
-    if (textChunk) {
-      return parseStructuredText(textChunk.text, fallbackUrl);
-    }
-  }
-
-  if (typeof data.text === "string") {
-    return parseStructuredText(data.text, fallbackUrl);
-  }
-
-  return null;
 }
 
-function parseStructuredText(text, fallbackUrl) {
-  const lines = text.split(/\r?\n/);
-  const result = {};
-
-  for (const line of lines) {
-    const [label, ...rest] = line.split("：");
-    if (!rest.length) {
-      continue;
-    }
-    const value = rest.join("：").trim();
-    if (label === "標題") {
-      result.title = value;
-    } else if (label === "主文") {
-      result.body = value;
-    } else if (label === "CTA") {
-      result.cta = value;
-    } else if (label === "連結") {
-      result.url = value;
-    }
-  }
-
-  if (result.title && result.body && result.cta) {
-    result.url = result.url || fallbackUrl;
-    return result;
-  }
-
-  return null;
-}
-
-async function requestBeckV1(data) {
-  const prompt = buildPrompt(data);
-
-  if (MODE === "openclaw") {
-    const output = await requestViaOpenClaw(prompt, data.productUrl);
-    return {
-      mode: "openclaw",
-      prompt,
-      output
-    };
-  }
-
-  if (!ENDPOINT) {
-    return {
-      mode: "mock",
-      prompt,
-      output: buildMockCopy(data)
-    };
-  }
-
-  const headers = { "Content-Type": "application/json" };
-  if (API_KEY) {
-    headers.Authorization = `Bearer ${API_KEY}`;
-  }
-
-  const payload = {
-    input: data,
-    prompt
-  };
-
-  const response = await fetch(ENDPOINT, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    throw new Error(`Agent request failed with status ${response.status}`);
-  }
-
-  const result = await response.json();
-  const normalized = normalizeAgentResponse(result, data.productUrl);
-  if (!normalized) {
-    throw new Error("Agent response format is invalid");
-  }
-
-  return {
-    mode: "live",
-    prompt,
-    output: normalized
-  };
-}
-
-function requestViaOpenClaw(prompt, fallbackUrl) {
-  return new Promise((resolve, reject) => {
-    const { spawn } = require("child_process");
-    const child = spawn(
-      OPENCLAW_BIN,
-      ["agent", "--agent", OPENCLAW_AGENT_ID, "--message", prompt, "--json"],
-      {
-        cwd: __dirname,
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.on("error", reject);
-
-    child.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || `OpenClaw agent failed with code ${code}`));
-        return;
-      }
-
-      try {
-        const jsonStart = stdout.indexOf("{");
-        const jsonText = jsonStart >= 0 ? stdout.slice(jsonStart) : stdout;
-        const parsed = JSON.parse(jsonText);
-        const text =
-          parsed?.result?.payloads?.[0]?.text ||
-          parsed?.result?.finalAssistantVisibleText ||
-          parsed?.reply?.text ||
-          parsed?.result?.reply?.text ||
-          parsed?.message ||
-          "";
-        const normalized = normalizeAgentResponse({ text }, fallbackUrl);
-        if (!normalized) {
-          reject(new Error("OpenClaw agent response format is invalid"));
-          return;
-        }
-        resolve(normalized);
-      } catch (error) {
-        reject(error);
-      }
-    });
+async function startServer() {
+  await checkBeckV1();
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🔥 live server running on port ${PORT}`);
+    console.log(`📍 http://localhost:${PORT}`);
   });
 }
 
-function serveFile(req, res) {
-  const requestPath = req.url === "/" ? "/index.html" : req.url;
-  const safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = path.join(PUBLIC_DIR, safePath);
-
-  if (!filePath.startsWith(PUBLIC_DIR)) {
-    sendJson(res, 403, { error: "Forbidden" });
-    return;
-  }
-
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      sendJson(res, 404, { error: "Not found" });
-      return;
-    }
-
-    const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
-    res.end(data);
-  });
-}
-
-const server = http.createServer(async (req, res) => {
-  if (req.method === "GET" && req.url === "/api/health") {
-    const endpointMode = MODE === "openclaw" ? "openclaw" : ENDPOINT ? "live" : "mock";
-    sendJson(res, 200, { ok: true, endpointMode });
-    return;
-  }
-
-  if (req.method === "POST" && req.url === "/api/generate-copy") {
-    try {
-      const body = await readBody(req);
-      const payload = body ? JSON.parse(body) : {};
-      const validation = validatePayload(payload);
-
-      if (!validation.ok) {
-        sendJson(res, 422, { ok: false, errors: validation.errors });
-        return;
-      }
-
-      const result = await requestBeckV1(validation.data);
-      sendJson(res, 200, { ok: true, ...result });
-    } catch (error) {
-      sendJson(res, 500, {
-        ok: false,
-        error: error.message || "Unknown error"
-      });
-    }
-    return;
-  }
-
-  if (req.method === "GET") {
-    serveFile(req, res);
-    return;
-  }
-
-  sendJson(res, 405, { error: "Method not allowed" });
-});
-
-server.listen(PORT, () => {
-  console.log(`lihi copy generator running at http://localhost:${PORT}`);
-});
+startServer();

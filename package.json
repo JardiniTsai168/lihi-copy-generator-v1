@@ -5,5 +5,8 @@
   "description": "V1 web copy generator prototype for lihi lab",
   "scripts": {
     "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }

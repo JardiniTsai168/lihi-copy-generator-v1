@@ -1,0 +1,6 @@
+tunnel: 24399728-ad72-46a2-9d43-4f1fe34b012a
+credentials-file: /Users/tonytsai/.cloudflared/24399728-ad72-46a2-9d43-4f1fe34b012a.json
+ingress:
+  - hostname: pokerprofittracker.aicoder.tw
+    service: http://127.0.0.1:3000
+  - service: http_status:404
