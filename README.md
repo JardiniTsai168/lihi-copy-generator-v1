@@ -106,3 +106,20 @@ npm start
 - `public/` 可以直接部署成 GitHub Pages
 - 沒有後端時，頁面會自動切到 static demo mock 模式
 - 若未來有公開 API，可修改 `public/config.js` 的 `apiBaseUrl`
+
+## 本機 Live 對外測試
+
+若要直接把本機 `beck-v1` live 版公開成測試網址：
+
+```bash
+chmod +x scripts/start-live.sh scripts/stop-live.sh
+./scripts/start-live.sh
+```
+
+停止：
+
+```bash
+./scripts/stop-live.sh
+```
+
+啟動後可從 `.runtime/tunnel.log` 取得 `trycloudflare.com` 測試網址。

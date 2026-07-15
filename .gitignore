@@ -3,6 +3,8 @@ node_modules
 .openclaw
 memory
 lihi-shared
+.runtime
+.cloudflared-live.yml
 AGENTS.md
 SOUL.md
 USER.md
