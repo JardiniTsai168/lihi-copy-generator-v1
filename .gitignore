@@ -1,0 +1,12 @@
+node_modules
+.DS_Store
+.openclaw
+memory
+lihi-shared
+AGENTS.md
+SOUL.md
+USER.md
+TOOLS.md
+HEARTBEAT.md
+IDENTITY.md
+MEMORY.md

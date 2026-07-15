@@ -1,0 +1,9 @@
+{
+  "name": "lihi-copy-generator-v1",
+  "version": "1.0.0",
+  "private": true,
+  "description": "V1 web copy generator prototype for lihi lab",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

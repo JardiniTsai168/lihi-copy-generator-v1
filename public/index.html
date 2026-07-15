@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>lihi 實驗室｜文案產生器 V1</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">LIHI LAB / COPY ENGINE V1</p>
+          <h1>把產品資訊整理成<br />可直接上稿的廣告文案</h1>
+          <p class="lede">
+            先聚焦一個任務：讓行銷人輸入產品名稱、優點、連結與語氣後，快速拿到一則由貝克 v1 脈絡生成的廣告文案。
+          </p>
+        </div>
+        <div class="hero-note">
+          <span class="chip">V1</span>
+          <span class="chip chip-secondary" id="mode-badge">連線檢查中</span>
+          <p>輸出格式固定為標題、主文、CTA、連結。第一版不登入、不存歷史，先把體驗做順。</p>
+        </div>
+      </section>
+
+      <section class="grid">
+        <form class="panel panel-form" id="copy-form" novalidate>
+          <div class="panel-head">
+            <h2>輸入資料</h2>
+            <p>把產品核心資訊填進來，系統會組成給貝克 v1 的 prompt。</p>
+          </div>
+
+          <label class="field">
+            <span>產品名稱</span>
+            <input id="productName" name="productName" type="text" maxlength="80" placeholder="例如：AI 廣告助手" required />
+            <small class="error" data-error-for="productName"></small>
+          </label>
+
+          <fieldset class="fieldset">
+            <legend>產品優點（3 到 5 個）</legend>
+            <div class="benefits" id="benefits-group">
+              <label class="field">
+                <span>優點 1</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="例如：快速整理產品賣點" required />
+              </label>
+              <label class="field">
+                <span>優點 2</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="例如：減少文案來回修改" required />
+              </label>
+              <label class="field">
+                <span>優點 3</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="例如：可套用既有行銷語氣" required />
+              </label>
+              <label class="field">
+                <span>優點 4</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="選填" />
+              </label>
+              <label class="field">
+                <span>優點 5</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="選填" />
+              </label>
+            </div>
+            <small class="error" data-error-for="benefits"></small>
+          </fieldset>
+
+          <label class="field">
+            <span>產品頁連結</span>
+            <input id="productUrl" name="productUrl" type="url" placeholder="https://example.com/product" required />
+            <small class="error" data-error-for="productUrl"></small>
+          </label>
+
+          <fieldset class="fieldset">
+            <legend>文案風格</legend>
+            <div class="tone-switch">
+              <label class="tone-card">
+                <input type="radio" name="tone" value="warm" checked />
+                <span>溫和風格</span>
+                <small>偏信任感、專業感、引導式溝通</small>
+              </label>
+              <label class="tone-card">
+                <input type="radio" name="tone" value="aggressive" />
+                <span>Aggressive 風格</span>
+                <small>偏直接、強烈、促動行動</small>
+              </label>
+            </div>
+            <small class="error" data-error-for="tone"></small>
+          </fieldset>
+
+          <div class="actions">
+            <button class="primary-button" type="submit" id="submit-button">產出文案</button>
+            <p class="status" id="form-status">待命中，先輸入產品資訊。</p>
+          </div>
+        </form>
+
+        <section class="panel panel-output">
+          <div class="panel-head">
+            <h2>產出結果</h2>
+            <p>這裡會顯示貝克 v1 生成的最終文案。</p>
+          </div>
+
+          <div class="output-card empty" id="result-card">
+            <div class="result-block">
+              <span class="result-label">標題</span>
+              <h3 id="result-title">尚未產出</h3>
+            </div>
+            <div class="result-block">
+              <span class="result-label">主文</span>
+              <p id="result-body">送出表單後，會在這裡顯示完整廣告文案。</p>
+            </div>
+            <div class="result-row">
+              <div class="result-block">
+                <span class="result-label">CTA</span>
+                <p id="result-cta">-</p>
+              </div>
+              <div class="result-block">
+                <span class="result-label">連結</span>
+                <a id="result-url" href="#" target="_blank" rel="noreferrer">-</a>
+              </div>
+            </div>
+            <button class="secondary-button" type="button" id="copy-button" disabled>複製文案</button>
+          </div>
+
+          <div class="prompt-card">
+            <div class="panel-head panel-head-inline">
+              <h2>Prompt 預覽</h2>
+              <button class="text-button" type="button" id="refresh-prompt-button">更新預覽</button>
+            </div>
+            <pre id="prompt-preview">先填入表單，這裡會顯示整理好的 prompt。</pre>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
