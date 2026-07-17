@@ -1,0 +1,3 @@
+BECK_V1_ENDPOINT=https://your-agent-endpoint.example.com/generate-copy
+BECK_V1_API_KEY=replace-me
+BECK_V1_TIMEOUT_MS=30000

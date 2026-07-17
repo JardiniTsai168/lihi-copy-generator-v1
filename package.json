@@ -4,12 +4,17 @@
   "private": true,
   "description": "V1 web copy generator powered by beck-v1 agent",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "wrangler dev",
+    "dev": "wrangler dev",
+    "dev:legacy": "node server.js",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.112.0"
   }
 }

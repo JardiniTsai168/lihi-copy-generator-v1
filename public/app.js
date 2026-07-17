@@ -12,6 +12,7 @@ const resultTitle = document.querySelector("#result-title");
 const resultBody = document.querySelector("#result-body");
 const resultCta = document.querySelector("#result-cta");
 const resultUrl = document.querySelector("#result-url");
+let promptRenderTimer = null;
 
 const errorEls = {
   productName: document.querySelector('[data-error-for="productName"]'),
@@ -124,6 +125,13 @@ function renderPrompt() {
   promptPreview.textContent = buildPrompt(getFormData());
 }
 
+function schedulePromptRender() {
+  window.clearTimeout(promptRenderTimer);
+  promptRenderTimer = window.setTimeout(() => {
+    renderPrompt();
+  }, 120);
+}
+
 function renderResult(output) {
   resultTitle.textContent = output.title;
   resultBody.textContent = output.body;
@@ -205,7 +213,7 @@ async function handleCopy() {
 form.addEventListener("submit", handleSubmit);
 copyButton.addEventListener("click", handleCopy);
 refreshPromptButton.addEventListener("click", renderPrompt);
-form.addEventListener("input", renderPrompt);
+form.addEventListener("input", schedulePromptRender);
 
 renderPrompt();
 checkHealth();

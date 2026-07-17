@@ -35,28 +35,29 @@ body {
 }
 
 .orb {
-  position: fixed;
+  position: absolute;
   z-index: 0;
-  filter: blur(24px);
-  opacity: 0.5;
   border-radius: 50%;
   pointer-events: none;
+  will-change: auto;
 }
 
 .orb-a {
   top: 5rem;
   right: -4rem;
-  width: 16rem;
-  height: 16rem;
-  background: rgba(255, 107, 157, 0.28);
+  width: 18rem;
+  height: 18rem;
+  opacity: 0.32;
+  background: radial-gradient(circle, rgba(255, 107, 157, 0.26) 0%, rgba(255, 107, 157, 0.08) 52%, transparent 72%);
 }
 
 .orb-b {
-  bottom: 4rem;
+  top: 34rem;
   left: -3rem;
-  width: 14rem;
-  height: 14rem;
-  background: rgba(26, 26, 94, 0.12);
+  width: 16rem;
+  height: 16rem;
+  opacity: 0.22;
+  background: radial-gradient(circle, rgba(26, 26, 94, 0.18) 0%, rgba(26, 26, 94, 0.06) 56%, transparent 76%);
 }
 
 .shell {
@@ -79,9 +80,8 @@ body {
 .hero-note,
 .panel,
 .prompt-card {
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-soft);
 }
 
@@ -167,6 +167,7 @@ body {
 
 .panel {
   padding: 1.5rem;
+  contain: layout paint;
 }
 
 .panel-head {
@@ -413,6 +414,7 @@ body {
   font-family: var(--mono);
   line-height: 1.6;
   color: rgba(26, 26, 94, 0.82);
+  content-visibility: auto;
 }
 
 @media (max-width: 920px) {

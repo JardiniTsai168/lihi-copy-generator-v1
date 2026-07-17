@@ -2,4 +2,6 @@ node_modules/
 .DS_Store
 *.log
 .env
+.dev.vars
+.wrangler/
 beck-v1-context.json
