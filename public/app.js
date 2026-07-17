@@ -12,6 +12,8 @@ const resultTitle = document.querySelector("#result-title");
 const resultBody = document.querySelector("#result-body");
 const resultCta = document.querySelector("#result-cta");
 const resultUrl = document.querySelector("#result-url");
+const resultModeChip = document.querySelector("#result-mode-chip");
+const resultMetaText = document.querySelector("#result-meta-text");
 let promptRenderTimer = null;
 
 const errorEls = {
@@ -142,6 +144,24 @@ function renderResult(output) {
   copyButton.disabled = false;
 }
 
+function renderResultMode(mode, warning) {
+  const normalizedMode = mode === "live" || mode === "openclaw" ? "live" : "mock";
+  resultModeChip.classList.remove("chip-live", "chip-mock", "chip-secondary");
+  resultModeChip.classList.add(normalizedMode === "live" ? "chip-live" : "chip-mock");
+
+  if (normalizedMode === "live") {
+    resultModeChip.textContent = "本次結果：Live";
+    resultMetaText.textContent = "這一筆結果是從真實 agent 回來的，不是本地 mock 模板。";
+    return;
+  }
+
+  resultModeChip.textContent = warning === "live_endpoint_failed" ? "本次結果：Mock Fallback" : "本次結果：Mock";
+  resultMetaText.textContent =
+    warning === "live_endpoint_failed"
+      ? "這次原本嘗試走 live，但中途失敗，已自動退回 mock fallback。"
+      : "這一筆不是 live agent 產出，而是 mock / demo fallback。";
+}
+
 async function checkHealth() {
   try {
     const response = await fetch(getApiUrl("health"));
@@ -189,6 +209,7 @@ async function handleSubmit(event) {
     }
 
     renderResult(result.output);
+    renderResultMode(result.mode, result.warning);
     promptPreview.textContent = result.prompt;
     statusEl.textContent =
       result.mode === "live" || result.mode === "openclaw"
@@ -197,6 +218,7 @@ async function handleSubmit(event) {
   } catch (error) {
     const fallback = buildMockCopy(data);
     renderResult(fallback);
+    renderResultMode("mock");
     promptPreview.textContent = buildPrompt(data);
     statusEl.textContent = "目前沒有可用後端，已切到 static demo mock 模式。";
   } finally {

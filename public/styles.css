@@ -369,6 +369,24 @@ body {
   opacity: 0.92;
 }
 
+.result-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.result-meta-text {
+  margin: 0;
+  max-width: 38ch;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: right;
+}
+
 .result-block h3,
 .result-block p,
 .result-block a {
@@ -423,6 +441,15 @@ body {
   .tone-switch,
   .result-row {
     grid-template-columns: 1fr;
+  }
+
+  .result-meta {
+    flex-direction: column;
+  }
+
+  .result-meta-text {
+    max-width: none;
+    text-align: left;
   }
 
   .actions {
