@@ -7,9 +7,11 @@
     "start": "wrangler dev",
     "dev": "wrangler dev",
     "dev:legacy": "node server.js",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "bridge:start": "node bridge-server.js"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.21.2"

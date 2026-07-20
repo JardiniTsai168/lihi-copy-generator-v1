@@ -1,0 +1,7 @@
+tunnel: 629f5ab9-49d8-40b9-b661-db19147e0898
+credentials-file: /Users/tonytsai/.cloudflared/629f5ab9-49d8-40b9-b661-db19147e0898.json
+
+ingress:
+  - hostname: lihi-copy-bridge.howlihi.com
+    service: http://127.0.0.1:3456
+  - service: http_status:404

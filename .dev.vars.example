@@ -1,3 +1,5 @@
-BECK_V1_ENDPOINT=https://your-agent-endpoint.example.com/generate-copy
-BECK_V1_API_KEY=replace-me
-BECK_V1_TIMEOUT_MS=30000
+COPY_ENGINE_ENDPOINT=https://your-copy-engine.example.com
+COPY_ENGINE_API_KEY=replace-me
+OPENAI_API_KEY=replace-me
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_TIMEOUT_MS=60000

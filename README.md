@@ -1,6 +1,6 @@
 # Lihi Copy Generator 文案產生器
 
-一個由貝克 v1 驅動的廣告文案產生器
+一個把 Beck 文案策略框架產品化的客戶版廣告文案產生器
 
 ## 快速開始
 
@@ -14,7 +14,7 @@ npm run dev
 
 然後開啟 <http://127.0.0.1:8787>
 
-沒有設定 `BECK_V1_ENDPOINT` 時，Worker 會自動以 mock 模式提供 `/api/health` 與 `/api/generate-copy`。
+沒有設定 `COPY_ENGINE_ENDPOINT` 或 `BECK_V1_ENDPOINT` 時，Worker 會自動以 mock 模式提供 `/api/health` 與 `/api/generate-copy`。
 
 ### Cloudflare Worker 部署
 
@@ -25,17 +25,13 @@ npm run deploy
 部署前請先設定 Cloudflare secrets / vars：
 
 ```bash
-wrangler secret put BECK_V1_API_KEY
-wrangler secret put BECK_V1_ENDPOINT
+wrangler secret put COPY_ENGINE_API_KEY
+wrangler secret put COPY_ENGINE_ENDPOINT
 ```
 
-如果你的 endpoint 不吃標準 `Authorization: Bearer ...`，也可以額外設定：
+相容舊設定的話，也可以沿用 `BECK_V1_API_KEY` 與 `BECK_V1_ENDPOINT`。
 
-```bash
-wrangler secret put BECK_V1_AUTH_HEADER
-```
-
-Worker 會把以下 payload 送到 `BECK_V1_ENDPOINT`：
+Worker 會把以下 payload 送到 copy engine endpoint：
 
 ```json
 {
@@ -69,25 +65,39 @@ CTA：...
 連結：...
 ```
 
-### Legacy Node server
+### Bridge Server
 
-如果還要沿用先前的本機 `express` 測試流程：
+本機 bridge server 會保留頁面分析與 OCR，但不再依賴 OpenClaw session，而是直接呼叫模型 API：
 
 ```bash
-npm run dev:legacy
+npm run bridge:start
 ```
 
 ## 環境變數
 
 ```bash
-BECK_V1_ENDPOINT=https://your-agent-endpoint.example.com/generate-copy
-BECK_V1_API_KEY=replace-me
-BECK_V1_TIMEOUT_MS=30000
+COPY_ENGINE_ENDPOINT=https://your-copy-engine.example.com
+COPY_ENGINE_API_KEY=replace-me
+OPENAI_API_KEY=replace-me
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_TIMEOUT_MS=60000
+SCREENSHOTONE_ACCESS_KEY=replace-me
+SCREENSHOTONE_ENABLED=true
 ```
 
 ## API
 
 ### POST /api/generate-copy
+
+live 模式現在的後端流程是：
+
+1. 抓取 `productUrl` 銷售頁 HTML
+2. 若 HTML 被 `401/403/429` 或逾時，改用 `ScreenshotOne` 取得 full-page screenshot slices
+3. 解析頁面 title、meta、heading、段落、價格訊號與圖片資訊
+4. 收集完整商品圖清單，並對商品圖或 screenshot slices 跑 OCR
+5. 挑選高價值商品圖與 screenshot slices 做 vision 分析
+6. 把頁面分析結果與使用者輸入欄位合成 Beck 文案策略 prompt
+7. 直接交給模型 API 產出文案
 
 **Request**
 ```json
@@ -104,7 +114,13 @@ BECK_V1_TIMEOUT_MS=30000
 {
   "ok": true,
   "mode": "live",
+  "provider": "openai",
+  "model": "gpt-4.1-mini",
   "prompt": "...",
+  "pageAnalysis": {
+    "sourceUrl": "https://example.com",
+    "summary": "頁面摘要..."
+  },
   "output": {
     "title": "標題",
     "body": "主文內容",
@@ -114,11 +130,32 @@ BECK_V1_TIMEOUT_MS=30000
 }
 ```
 
+### OCR / 頁面分析相關環境變數
+
+```bash
+PAGE_FETCH_TIMEOUT_MS=15000
+IMAGE_FETCH_TIMEOUT_MS=15000
+OCR_IMAGE_LIMIT=3
+OCR_MAX_IMAGE_BYTES=4194304
+OCR_LANG=chi_tra+eng
+MAX_PRODUCT_IMAGES=30
+OCR_ALL_IMAGES=true
+VISION_IMAGE_LIMIT=8
+SCREENSHOT_VISION_LIMIT=3
+SCREENSHOTONE_ACCESS_KEY=replace-me
+SCREENSHOTONE_ENABLED=true
+SCREENSHOTONE_API_BASE_URL=https://api.screenshotone.com/take
+SCREENSHOTONE_VIEWPORT_WIDTH=1440
+SCREENSHOTONE_VIEWPORT_HEIGHT=1800
+SCREENSHOTONE_FULL_PAGE_MAX_HEIGHT=20000
+SCREENSHOTONE_SLICE_HEIGHT=4000
+```
+
 ## GitHub Pages Demo
 
 <https://jardinitsai168.github.io/lihi-copy-generator-v1/>
 
-GitHub Pages 版本仍是純靜態 demo，不會呼叫 Worker live endpoint。
+GitHub Pages 版本仍是純靜態 demo，不會呼叫 live endpoint。
 
 ## License
 

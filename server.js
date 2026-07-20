@@ -2,9 +2,19 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs/promises');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BECK_V1_SESSION_KEY =
+  process.env.BECK_V1_SESSION_KEY || "agent:beck-v1:main";
+const BECK_V1_TRANSCRIPT_PATH =
+  process.env.BECK_V1_TRANSCRIPT_PATH ||
+  "/Users/tonytsai/.openclaw/agents/beck-v1/sessions/46152bc9-a3e6-47b4-bce5-0dc0e0b59514.jsonl";
+const OPENCLAW_BIN = process.env.OPENCLAW_BIN || "openclaw";
+const OPENCLAW_TIMEOUT_MS = Number(process.env.OPENCLAW_TIMEOUT_MS || 90000);
+const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY || "";
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -12,19 +22,28 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let beckV1Available = false;
 
+function isAuthorized(req) {
+  if (!BRIDGE_API_KEY) {
+    return true;
+  }
+
+  const authHeader = req.get("authorization") || "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  return bearer === BRIDGE_API_KEY;
+}
+
 async function checkBeckV1() {
   try {
-    const agents = await agents_list();
-    beckV1Available = Array.isArray(agents) && agents.some(a => 
-      a.id === 'beck-v1' || a.name === 'beck-v1' || (a.label && a.label.includes('beck-v1'))
-    );
+    await fs.access(BECK_V1_TRANSCRIPT_PATH);
+    beckV1Available = true;
+
     if (beckV1Available) {
-      console.log('✅ 貝克 v1 agent 可用');
+      console.log('✅ 貝克 v1 session 可用');
     } else {
-      console.log('⚠️ 貝克 v1 agent 未找到，將使用 mock 模式');
+      console.log('⚠️ 貝克 v1 session 未找到，將使用 mock 模式');
     }
   } catch (e) {
-    console.log('⚠️ 無法檢查 agent 列表，將使用 mock 模式');
+    console.log('⚠️ 無法檢查 beck-v1 session，將使用 mock 模式');
     beckV1Available = false;
   }
 }
@@ -36,11 +55,16 @@ app.get('/api/health', async (req, res) => {
     service: 'lihi-copy-generator',
     version: '1.1.0',
     beckV1Available,
+    endpointMode: beckV1Available ? 'live' : 'mock',
     mode: beckV1Available ? 'live' : 'mock'
   });
 });
 
 app.post('/api/generate-copy', async (req, res) => {
+  if (!isAuthorized(req)) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
   const { product_name, benefits, product_url, tone } = req.body;
 
   const errors = [];
@@ -74,17 +98,8 @@ app.post('/api/generate-copy', async (req, res) => {
   }
 
   try {
-    await checkBeckV1();
-    
-    if (beckV1Available) {
-      const copyResult = await generateCopyWithBeckV1(product_name, benefits, product_url, tone);
-      res.json(copyResult);
-    } else {
-      const mockResponse = generateMockCopy(product_name, benefits, product_url, tone);
-      setTimeout(() => {
-        res.json(mockResponse);
-      }, 500);
-    }
+    const copyResult = await generateCopyWithBeckV1(product_name, benefits, product_url, tone);
+    res.json(copyResult);
   } catch (error) {
     console.error('生成文案時出錯:', error);
     const mockResponse = generateMockCopy(product_name, benefits, product_url, tone);
@@ -94,10 +109,12 @@ app.post('/api/generate-copy', async (req, res) => {
 
 async function generateCopyWithBeckV1(productName, benefits, productUrl, tone) {
   const toneLabel = tone === 'warm' ? '溫和風格' : 'aggressive 風格';
-  
+  const requestId = `webcopy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const benefitsList = benefits.map((b, i) => `${i + 1}. ${b}`).join('\n');
-  
-  const prompt = `你是「貝克 v1」，擅長整合行銷策略、受眾洞察、轉換導向寫作經驗，以及既有知識庫中的行銷相關資料，產出可直接使用的廣告文案。
+
+  const prompt = `[webcopy-request:${requestId}]
+
+你是「貝克 v1」，擅長整合行銷策略、受眾洞察、轉換導向寫作經驗，以及既有知識庫中的行銷相關資料，產出可直接使用的廣告文案。
 
 請根據以下資訊，產出 1 則可直接使用的廣告文案：
 
@@ -115,6 +132,7 @@ ${benefitsList}
 4. 若風格是「aggressive」，語氣要偏強烈、直接、促動行動，但不要低俗或過度誇大。
 5. 不要產出多個版本，先只產出一個最佳版本。
 6. 不要解釋你的思考過程，只輸出結果。
+7. 不要提到 request id、系統標記或 webcopy-request。
 
 請用以下格式輸出：
 
@@ -125,19 +143,113 @@ CTA：
 
   try {
     console.log('📤 呼叫 beck-v1 agent...');
-    const response = await sessions_send({
-      agentId: 'beck-v1',
-      message: prompt,
-      timeoutSeconds: 90
-    });
-    
-    const rawOutput = response.message || response.text || '';
+    const rawOutput = await sendPromptViaOpenClaw(prompt, requestId);
     console.log('📥 beck-v1 回應:', rawOutput.substring(0, 200) + '...');
     return parseCopyOutput(rawOutput, productUrl);
   } catch (error) {
     console.error('呼叫 beck-v1 失敗:', error);
     throw new Error('無法呼叫貝克 v1 agent');
   }
+}
+
+async function sendPromptViaOpenClaw(prompt, requestId) {
+  const startedAt = new Date();
+  const child = spawn(
+    OPENCLAW_BIN,
+    [
+      'terminal',
+      '--local',
+      '--deliver',
+      '--session',
+      BECK_V1_SESSION_KEY,
+      '--message',
+      prompt,
+      '--timeout-ms',
+      String(OPENCLAW_TIMEOUT_MS)
+    ],
+    {
+      detached: true,
+      stdio: 'ignore'
+    }
+  );
+
+  child.unref();
+
+  try {
+    const result = await waitForAssistantReply(requestId, startedAt, OPENCLAW_TIMEOUT_MS);
+    return result;
+  } finally {
+    try {
+      process.kill(child.pid, 'SIGTERM');
+    } catch (_) {
+      // ignore process cleanup failures
+    }
+  }
+}
+
+async function waitForAssistantReply(requestId, startedAt, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const lines = await readTranscriptLines();
+    let requestMessageId = null;
+
+    for (const entry of lines) {
+      const message = entry?.message;
+      if (!message) continue;
+
+      if (
+        message.role === 'user' &&
+        typeof message.content === 'string' &&
+        message.content.includes(`[webcopy-request:${requestId}]`) &&
+        new Date(entry.timestamp).getTime() >= startedAt.getTime()
+      ) {
+        requestMessageId = entry.id;
+      }
+    }
+
+    if (requestMessageId) {
+      for (const entry of lines) {
+        const message = entry?.message;
+        if (!message) continue;
+
+        if (
+          message.role === 'assistant' &&
+          entry.parentId === requestMessageId &&
+          Array.isArray(message.content)
+        ) {
+          const text = message.content
+            .filter((item) => item.type === 'text' && item.text)
+            .map((item) => item.text)
+            .join('\n')
+            .trim();
+
+          if (text) {
+            return text;
+          }
+        }
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  throw new Error('等待 beck-v1 回應逾時');
+}
+
+async function readTranscriptLines() {
+  const raw = await fs.readFile(BECK_V1_TRANSCRIPT_PATH, 'utf8');
+  return raw
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (_) {
+        return null;
+      }
+    })
+    .filter(Boolean);
 }
 
 function parseCopyOutput(rawOutput, defaultUrl) {

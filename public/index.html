@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>lihi 實驗室｜文案產生器 V1</title>
+    <title>廣告文案產生器 | lihi 實驗室</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -11,81 +11,96 @@
     <div class="orb orb-b"></div>
     <main class="shell">
       <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">LIHI LAB / COPY ENGINE V1</p>
-          <h1>把產品資訊整理成<br />可直接上稿的廣告文案</h1>
-          <p class="lede">
-            先聚焦一個任務：讓行銷人輸入產品名稱、優點、連結與語氣後，快速拿到一則由貝克 v1 脈絡生成的廣告文案。
-          </p>
-        </div>
-        <div class="hero-note">
-          <span class="chip">V1</span>
+        <div class="hero-title-row">
+          <h1 class="hero-title">廣告文案產生器 | lihi 實驗室</h1>
           <span class="chip chip-secondary" id="mode-badge">連線檢查中</span>
-          <p>輸出格式固定為標題、主文、CTA、連結。第一版不登入、不存歷史，先把體驗做順。</p>
         </div>
       </section>
 
       <section class="grid">
         <form class="panel panel-form" id="copy-form" novalidate>
           <div class="panel-head">
-            <h2>輸入資料</h2>
-            <p>把產品核心資訊填進來，系統會組成給貝克 v1 的 prompt。</p>
+            <h2>輸入產品資訊</h2>
           </div>
 
-          <label class="field">
-            <span>產品名稱</span>
-            <input id="productName" name="productName" type="text" maxlength="80" placeholder="例如：AI 廣告助手" required />
-            <small class="error" data-error-for="productName"></small>
-          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>產品名稱</span>
+              <input id="productName" name="productName" type="text" maxlength="80" placeholder="例如：南瓜濃湯" required />
+              <small class="error" data-error-for="productName"></small>
+            </label>
+
+            <label class="field">
+              <span>產品頁連結</span>
+              <input id="productUrl" name="productUrl" type="text" placeholder="example.com/product" required />
+              <small class="error" data-error-for="productUrl"></small>
+            </label>
+          </div>
 
           <fieldset class="fieldset">
-            <legend>產品優點（3 到 5 個）</legend>
-            <div class="benefits" id="benefits-group">
+            <legend>產品優點（至少 3 個）</legend>
+            <div class="benefit-grid" id="benefits-group">
               <label class="field">
                 <span>優點 1</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="例如：快速整理產品賣點" required />
+                <input name="benefit" type="text" maxlength="60" placeholder="天然食材" required />
               </label>
               <label class="field">
                 <span>優點 2</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="例如：減少文案來回修改" required />
+                <input name="benefit" type="text" maxlength="60" placeholder="無添加糖" required />
               </label>
               <label class="field">
                 <span>優點 3</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="例如：可套用既有行銷語氣" required />
-              </label>
-              <label class="field">
-                <span>優點 4</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="選填" />
-              </label>
-              <label class="field">
-                <span>優點 5</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="選填" />
+                <input name="benefit" type="text" maxlength="60" placeholder="適合 2-3 人享用" required />
               </label>
             </div>
+            <details class="extra-benefits">
+              <summary>補充第 4、5 個優點</summary>
+              <div class="benefit-grid benefit-grid-optional">
+                <label class="field">
+                  <span>優點 4</span>
+                  <input name="benefit" type="text" maxlength="60" placeholder="選填" />
+                </label>
+                <label class="field">
+                  <span>優點 5</span>
+                  <input name="benefit" type="text" maxlength="60" placeholder="選填" />
+                </label>
+              </div>
+            </details>
             <small class="error" data-error-for="benefits"></small>
           </fieldset>
-
-          <label class="field">
-            <span>產品頁連結</span>
-            <input id="productUrl" name="productUrl" type="url" placeholder="https://example.com/product" required />
-            <small class="error" data-error-for="productUrl"></small>
-          </label>
 
           <fieldset class="fieldset">
             <legend>文案風格</legend>
             <div class="tone-switch">
               <label class="tone-card">
-                <input type="radio" name="tone" value="warm" checked />
-                <span>溫和風格</span>
-                <small>偏信任感、專業感、引導式溝通</small>
+                <input type="radio" name="tone" value="brand" checked />
+                <span>品牌型</span>
               </label>
               <label class="tone-card">
-                <input type="radio" name="tone" value="aggressive" />
-                <span>Aggressive 風格</span>
-                <small>偏直接、強烈、促動行動</small>
+                <input type="radio" name="tone" value="conversion" />
+                <span>轉單型</span>
               </label>
             </div>
             <small class="error" data-error-for="tone"></small>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>感性 / 理性強度</legend>
+            <div class="voice-meter">
+              <div class="voice-meter-scale">
+                <span>感性</span>
+                <span>理性</span>
+              </div>
+              <input id="voiceBalance" name="voiceBalance" type="range" min="1" max="5" step="1" value="3" />
+              <div class="voice-meter-steps" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <p class="voice-meter-note" id="voice-balance-note">平衡：兼顧情境畫面與清楚價值。</p>
+            </div>
           </fieldset>
 
           <div class="actions">
@@ -96,47 +111,85 @@
 
         <section class="panel panel-output">
           <div class="panel-head">
-            <h2>產出結果</h2>
-            <p>這裡會顯示貝克 v1 生成的最終文案。</p>
+            <h2>產出文案</h2>
+          </div>
+
+          <div class="result-tabs" id="result-tabs" role="tablist" aria-label="文案格式">
+            <button class="result-tab is-active" type="button" id="tab-primary" data-tab="primary" role="tab" aria-selected="true">主要文案</button>
+            <button class="result-tab" type="button" id="tab-meta-ad" data-tab="meta_ad" role="tab" aria-selected="false">Meta 廣告</button>
+            <button class="result-tab" type="button" id="tab-google-ads" data-tab="google_ads" role="tab" aria-selected="false">Google Ads</button>
+            <button class="result-tab" type="button" id="tab-sms" data-tab="sms" role="tab" aria-selected="false">SMS</button>
+            <button class="result-tab" type="button" id="tab-line" data-tab="line" role="tab" aria-selected="false">LINE</button>
+            <button class="result-tab" type="button" id="tab-email" data-tab="email" role="tab" aria-selected="false">Email</button>
           </div>
 
           <div class="output-card empty" id="result-card">
-            <div class="result-meta">
-              <span class="chip chip-secondary" id="result-mode-chip">尚未產出</span>
-              <p class="result-meta-text" id="result-meta-text">送出後會在這裡顯示這一筆文案實際來自 live agent 還是 mock fallback。</p>
+            <div class="result-block result-block-sms is-hidden" id="result-sms-block">
+              <div class="result-head">
+                <span class="result-label sms-result-label" id="result-compact-label">SMS</span>
+                <button class="icon-copy-button" type="button" id="copy-sms-button" aria-label="複製渠道文案" disabled>
+                  <span aria-hidden="true">⧉</span>
+                </button>
+              </div>
+              <div class="sms-combined-copy" id="result-sms-copy">
+                <p><span id="result-sms-title">尚未產出</span></p>
+                <p><span id="result-sms-body">點擊上方 tab 後，會在這裡顯示渠道文案。</span></p>
+                <p><span id="result-sms-cta">-</span></p>
+                <p><a id="result-sms-url" href="#" target="_blank" rel="noreferrer">-</a></p>
+              </div>
             </div>
-            <div class="result-block">
-              <span class="result-label">標題</span>
+            <div class="result-block result-block-title">
+              <div class="result-head">
+                <span class="result-label" id="result-title-label">標題</span>
+                <button class="icon-copy-button" type="button" id="copy-title-button" aria-label="複製標題" disabled>
+                  <span aria-hidden="true">⧉</span>
+                </button>
+              </div>
               <h3 id="result-title">尚未產出</h3>
             </div>
-            <div class="result-block">
-              <span class="result-label">主文</span>
+            <div class="result-block result-block-body">
+              <div class="result-head">
+                <span class="result-label" id="result-body-label">主文</span>
+                <button class="icon-copy-button" type="button" id="copy-body-button" aria-label="複製主文" disabled>
+                  <span aria-hidden="true">⧉</span>
+                </button>
+              </div>
               <p id="result-body">送出表單後，會在這裡顯示完整廣告文案。</p>
             </div>
+            <div class="result-block result-block-description is-hidden" id="result-description-block">
+              <div class="result-head">
+                <span class="result-label" id="result-description-label">Description</span>
+                <button class="icon-copy-button" type="button" id="copy-description-button" aria-label="複製 Description" disabled>
+                  <span aria-hidden="true">⧉</span>
+                </button>
+              </div>
+              <p id="result-description">-</p>
+            </div>
             <div class="result-row">
-              <div class="result-block">
-                <span class="result-label">CTA</span>
+              <div class="result-block result-block-cta">
+                <div class="result-head">
+                  <span class="result-label" id="result-cta-label">CTA</span>
+                  <button class="icon-copy-button" type="button" id="copy-cta-button" aria-label="複製 CTA" disabled>
+                    <span aria-hidden="true">⧉</span>
+                  </button>
+                </div>
                 <p id="result-cta">-</p>
               </div>
-              <div class="result-block">
-                <span class="result-label">連結</span>
+              <div class="result-block result-block-url">
+                <div class="result-head">
+                  <span class="result-label" id="result-url-label">連結</span>
+                  <button class="icon-copy-button" type="button" id="copy-url-button" aria-label="複製連結" disabled>
+                    <span aria-hidden="true">⧉</span>
+                  </button>
+                </div>
                 <a id="result-url" href="#" target="_blank" rel="noreferrer">-</a>
               </div>
             </div>
-            <button class="secondary-button" type="button" id="copy-button" disabled>複製文案</button>
-          </div>
-
-          <div class="prompt-card">
-            <div class="panel-head panel-head-inline">
-              <h2>Prompt 預覽</h2>
-              <button class="text-button" type="button" id="refresh-prompt-button">更新預覽</button>
-            </div>
-            <pre id="prompt-preview">先填入表單，這裡會顯示整理好的 prompt。</pre>
           </div>
         </section>
       </section>
     </main>
-    <script src="./config.js"></script>
-    <script src="./app.js"></script>
+    <script src="./config.js?v=20260720c"></script>
+    <script src="./app.js?v=20260720c"></script>
   </body>
 </html>

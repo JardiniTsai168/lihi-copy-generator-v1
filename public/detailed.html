@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>detailed | 廣告文案產生器 | lihi 實驗室</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <main class="shell shell-detailed">
+      <section class="hero">
+        <div class="hero-title-row">
+          <div class="hero-title-stack">
+            <h1 class="hero-title">detailed | 廣告文案產生器</h1>
+            <p class="page-subtle">最近一次生成的 prompt 與頁面分析會整理在這裡。</p>
+          </div>
+          <div class="hero-actions">
+            <span class="chip chip-secondary" id="mode-badge">連線檢查中</span>
+            <a class="ghost-link" href="/">回到產生器</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="analysis-layout">
+        <div class="analysis-card empty" id="analysis-card">
+          <div class="panel-head">
+            <h2>頁面分析摘要</h2>
+          </div>
+          <div class="analysis-stack">
+            <div class="analysis-block">
+              <span class="analysis-label">頁面摘要</span>
+              <p id="analysis-summary">尚未分析</p>
+            </div>
+            <div class="analysis-block">
+              <span class="analysis-label">頁面標題 / 描述</span>
+              <p id="analysis-meta">尚未分析</p>
+            </div>
+            <div class="analysis-block">
+              <span class="analysis-label">價格 / 組合訊號</span>
+              <p id="analysis-prices">尚未分析</p>
+            </div>
+            <div class="analysis-block">
+              <span class="analysis-label">圖片解讀 / OCR</span>
+              <p id="analysis-ocr">尚未分析</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="prompt-card detailed-prompt-card">
+          <div class="panel-head panel-head-inline">
+            <h2>Prompt 預覽</h2>
+            <button class="text-button" type="button" id="refresh-prompt-button">更新預覽</button>
+          </div>
+          <pre id="prompt-preview">先回到主頁送出一次表單，這裡就會顯示最近一次的 prompt。</pre>
+        </div>
+      </section>
+    </main>
+    <script src="./config.js?v=20260719e"></script>
+    <script src="./app.js?v=20260719e"></script>
+  </body>
+</html>
