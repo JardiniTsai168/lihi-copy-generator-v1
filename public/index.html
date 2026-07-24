@@ -32,7 +32,20 @@
 
             <label class="field">
               <span>產品頁連結</span>
-              <input id="productUrl" name="productUrl" type="text" placeholder="example.com/product" required />
+              <div class="url-builder">
+                <div class="domain-field">
+                  <label class="domain-label" for="domainPreset">選網域</label>
+                  <select id="domainPreset" name="domainPreset">
+                    <option value="copy.bktsai.link" selected>copy.bktsai.link</option>
+                    <option value="lihi.io">lihi.io</option>
+                    <option value="howlihi.com">howlihi.com</option>
+                    <option value="custom">自填完整網址</option>
+                  </select>
+                </div>
+                <input id="productUrl" name="productUrl" type="text" placeholder="campaign/mockup-demo 或完整網址" required />
+              </div>
+              <p class="field-hint">先選網域，再填 path；如果已經有完整網址，也可以直接貼上覆蓋。</p>
+              <p class="field-preview" id="product-url-preview">預覽網址：<span>https://copy.bktsai.link/</span></p>
               <small class="error" data-error-for="productUrl"></small>
             </label>
           </div>
@@ -134,8 +147,10 @@
               <div class="sms-combined-copy" id="result-sms-copy">
                 <p><span id="result-sms-title">尚未產出</span></p>
                 <p><span id="result-sms-body">點擊上方 tab 後，會在這裡顯示渠道文案。</span></p>
-                <p><span id="result-sms-cta">-</span></p>
-                <p><a id="result-sms-url" href="#" target="_blank" rel="noreferrer">-</a></p>
+                <p class="sms-tail">
+                  <span id="result-sms-cta">-</span>
+                  <a id="result-sms-url" href="#" target="_blank" rel="noreferrer">-</a>
+                </p>
               </div>
             </div>
             <div class="result-block result-block-title">
@@ -146,6 +161,7 @@
                 </button>
               </div>
               <h3 id="result-title">尚未產出</h3>
+              <div class="variant-list is-hidden" id="result-title-variants"></div>
             </div>
             <div class="result-block result-block-body">
               <div class="result-head">
@@ -155,6 +171,7 @@
                 </button>
               </div>
               <p id="result-body">送出表單後，會在這裡顯示完整廣告文案。</p>
+              <div class="variant-list is-hidden" id="result-body-variants"></div>
             </div>
             <div class="result-block result-block-description is-hidden" id="result-description-block">
               <div class="result-head">
@@ -189,7 +206,7 @@
         </section>
       </section>
     </main>
-    <script src="./config.js?v=20260720c"></script>
-    <script src="./app.js?v=20260720c"></script>
+    <script src="./config.js?v=20260724a"></script>
+    <script src="./app.js?v=20260724a"></script>
   </body>
 </html>

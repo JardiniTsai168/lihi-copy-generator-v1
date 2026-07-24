@@ -1,6 +1,12 @@
-const APP_VERSION = "2026-07-20-google-ads-tab-v1";
+const APP_VERSION = "2026-07-24-domain-preset-v1";
 const STORAGE_KEY = `lihi-copy-last-run:${APP_VERSION}`;
 const appConfig = window.APP_CONFIG || {};
+const DOMAIN_PRESET_BASES = {
+  "copy.bktsai.link": "https://copy.bktsai.link",
+  "lihi.io": "https://lihi.io",
+  "howlihi.com": "https://howlihi.com",
+  custom: ""
+};
 const VOICE_BALANCE_PRESETS = {
   "1": "偏感性很多：先放大共鳴、畫面、情緒與留白，產品要輕輕帶到。",
   "2": "偏感性：保留情境感與生活畫面，但仍要讓產品價值看得懂。",
@@ -28,6 +34,8 @@ const resultCard = document.querySelector("#result-card");
 
 const resultTitle = document.querySelector("#result-title");
 const resultBody = document.querySelector("#result-body");
+const resultTitleVariants = document.querySelector("#result-title-variants");
+const resultBodyVariants = document.querySelector("#result-body-variants");
 const resultDescription = document.querySelector("#result-description");
 const resultCta = document.querySelector("#result-cta");
 const resultUrl = document.querySelector("#result-url");
@@ -38,6 +46,8 @@ const resultCtaLabel = document.querySelector("#result-cta-label");
 const resultUrlLabel = document.querySelector("#result-url-label");
 const resultDescriptionBlock = document.querySelector("#result-description-block");
 const resultRow = document.querySelector(".result-row");
+const resultCtaBlock = document.querySelector(".result-block-cta");
+const resultUrlBlock = document.querySelector(".result-block-url");
 const resultSmsBlock = document.querySelector("#result-sms-block");
 const resultCompactLabel = document.querySelector("#result-compact-label");
 const resultSmsTitle = document.querySelector("#result-sms-title");
@@ -67,6 +77,9 @@ const analysisPrices = document.querySelector("#analysis-prices");
 const analysisOcr = document.querySelector("#analysis-ocr");
 const voiceBalanceInput = document.querySelector("#voiceBalance");
 const voiceBalanceNote = document.querySelector("#voice-balance-note");
+const domainPresetInput = document.querySelector("#domainPreset");
+const productUrlInput = document.querySelector("#productUrl");
+const productUrlPreview = document.querySelector("#product-url-preview span");
 
 const errorEls = {
   productName: document.querySelector('[data-error-for="productName"]'),
@@ -93,13 +106,42 @@ function getFormData() {
   return {
     productName: String(formData.get("productName") || "").trim(),
     benefits,
-    productUrl: normalizeProductUrl(formData.get("productUrl")),
+    domainPreset: normalizeDomainPreset(formData.get("domainPreset")),
+    productUrl: normalizeProductUrl(formData.get("productUrl"), formData.get("domainPreset")),
     tone: String(formData.get("tone") || "").trim(),
     voiceBalance: normalizeVoiceBalance(formData.get("voiceBalance"))
   };
 }
 
-function normalizeProductUrl(value) {
+function normalizeDomainPreset(value) {
+  const normalized = String(value || "").trim();
+  return Object.hasOwn(DOMAIN_PRESET_BASES, normalized) ? normalized : "copy.bktsai.link";
+}
+
+function getDomainPresetBase(value) {
+  return DOMAIN_PRESET_BASES[normalizeDomainPreset(value)] || "";
+}
+
+function looksLikeHostnamePath(value) {
+  return /^[^/\s]+\.[^/\s]+(?:[/:?#]|$)/.test(String(value || "").trim());
+}
+
+function joinBaseAndPath(base, value) {
+  const normalizedBase = String(base || "").replace(/\/+$/g, "");
+  const raw = String(value || "").trim();
+
+  if (!normalizedBase) {
+    return raw;
+  }
+
+  if (!raw) {
+    return `${normalizedBase}/`;
+  }
+
+  return `${normalizedBase}/${raw.replace(/^\/+/g, "")}`;
+}
+
+function normalizeProductUrl(value, domainPreset) {
   const raw = String(value || "").trim();
   if (!raw) {
     return "";
@@ -111,6 +153,15 @@ function normalizeProductUrl(value) {
 
   if (raw.startsWith("//")) {
     return `https:${raw}`;
+  }
+
+  if (looksLikeHostnamePath(raw)) {
+    return `https://${raw}`;
+  }
+
+  const presetBase = getDomainPresetBase(domainPreset);
+  if (presetBase) {
+    return joinBaseAndPath(presetBase, raw);
   }
 
   return `https://${raw}`;
@@ -189,6 +240,7 @@ function buildPrompt(data) {
 - 產品名稱：${data.productName || "{{product_name}}"}
 - 產品優點：
 ${benefitLines || "1. {{benefit_1}}\n2. {{benefit_2}}\n3. {{benefit_3}}"}
+- 導流網域：${getDomainPresetBase(data.domainPreset) || "自填完整網址"}
 - 產品頁連結：${data.productUrl || "{{product_url}}"}
 - 文案風格：${data.tone || "{{tone}}"}
 - 感性 / 理性強度：${normalizeVoiceBalance(data.voiceBalance)}
@@ -242,6 +294,43 @@ function updateVoiceBalanceNote(value) {
   voiceBalanceNote.textContent = getVoiceBalancePromptText(value);
 }
 
+function renderProductUrlPreview() {
+  if (!productUrlPreview) {
+    return;
+  }
+
+  const currentPreset = domainPresetInput?.value || "copy.bktsai.link";
+  const currentValue = productUrlInput?.value || "";
+  const normalizedUrl = normalizeProductUrl(currentValue, currentPreset);
+  productUrlPreview.textContent = normalizedUrl || getDomainPresetBase(currentPreset) || "尚未設定";
+}
+
+function syncDomainPresetIntoUrl() {
+  if (!(productUrlInput instanceof HTMLInputElement) || !(domainPresetInput instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  const raw = productUrlInput.value.trim();
+  const presetBase = getDomainPresetBase(domainPresetInput.value);
+
+  if (!presetBase) {
+    renderProductUrlPreview();
+    return;
+  }
+
+  if (!raw) {
+    productUrlInput.value = `${presetBase}/`;
+    renderProductUrlPreview();
+    return;
+  }
+
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) && !raw.startsWith("//") && !looksLikeHostnamePath(raw)) {
+    productUrlInput.value = joinBaseAndPath(presetBase, raw);
+  }
+
+  renderProductUrlPreview();
+}
+
 function buildMockChannelCopy(tab, data, masterDraft) {
   if (tab === "sms") {
     const smsCopy = fitSmsFieldsToLimit({
@@ -293,27 +382,28 @@ function buildMockChannelCopy(tab, data, masterDraft) {
   }
 
   if (tab === "google_ads") {
+    const headlineGroups = buildGoogleAdsHeadlineVariants(data, masterDraft);
+    const descriptionGroups = buildGoogleAdsDescriptionVariants(data, masterDraft);
     return {
-      title: truncateTextHard(masterDraft?.hook || `${data.productName}值得先看`, 30),
-      body: truncateTextHard(
-        `${masterDraft?.valueProp || data.benefits.slice(0, 2).join("、")}。${data.benefits[0] ? `先看 ${data.benefits[0]} 這個重點。` : ""}`,
-        90
-      ),
-      description: truncateTextHard((data.benefits[0] || data.productName).replace(/\s+/g, "-"), 15),
-      cta: truncateTextHard((data.benefits[1] || "product-highlights").replace(/\s+/g, "-"), 15),
+      title: formatGoogleAdsVariantText(headlineGroups),
+      body: formatGoogleAdsVariantText(descriptionGroups),
+      description: normalizeGoogleAdsPathSegment(data.benefits[0] || data.productName),
+      cta: normalizeGoogleAdsPathSegment(data.benefits[1] || "product-highlights"),
       url: data.productUrl,
       labels: TAB_LABELS.google_ads
     };
   }
 
+  const metaCta = "前往商品頁看看";
   return {
     title: truncateText(masterDraft?.hook || `${data.productName}，先把重點說清楚`, 12),
-    body: appendUrlToMetaBody(
+    body: appendCtaAndUrlToMetaBody(
       truncateText(`${masterDraft?.valueProp || data.benefits.slice(0, 2).join("、")}。\n\n重點優點：${data.benefits.slice(0, 2).join("、")}。`, 90),
+      metaCta,
       data.productUrl
     ),
     description: truncateText(data.benefits[0] || `${data.productName}重點整理`, 15),
-    cta: "前往商品頁看看",
+    cta: metaCta,
     url: data.productUrl,
     labels: TAB_LABELS.meta_ad
   };
@@ -344,6 +434,8 @@ function applyResultLabels(labels = TAB_LABELS.primary) {
   const hasDescriptionBlock = channel === "meta_ad" || channel === "google_ads" || channel === "email";
   const isEmailTab = channel === "email";
   const isCompactTab = channel === "sms" || channel === "line";
+  const showCtaBlock = !isCompactTab && channel !== "email" && channel !== "meta_ad";
+  const showUrlBlock = !isCompactTab && channel !== "email";
 
   if (resultCard) {
     resultCard.dataset.channel = channel;
@@ -371,7 +463,15 @@ function applyResultLabels(labels = TAB_LABELS.primary) {
   }
 
   if (resultRow) {
-    resultRow.classList.toggle("is-hidden", isCompactTab || isEmailTab);
+    resultRow.classList.toggle("is-hidden", isCompactTab || (!showCtaBlock && !showUrlBlock));
+  }
+
+  if (resultCtaBlock) {
+    resultCtaBlock.classList.toggle("is-hidden", !showCtaBlock);
+  }
+
+  if (resultUrlBlock) {
+    resultUrlBlock.classList.toggle("is-hidden", !showUrlBlock);
   }
 
   if (resultSmsBlock) {
@@ -400,6 +500,8 @@ function renderResult(output) {
   }
 
   applyResultLabels(output?.labels || TAB_LABELS[activeTab] || TAB_LABELS.primary);
+  const googleHeadlineVariants = activeTab === "google_ads" ? parseGoogleAdsVariantText(output?.title) : [];
+  const googleDescriptionVariants = activeTab === "google_ads" ? parseGoogleAdsVariantText(output?.body) : [];
   resultTitle.textContent = output?.title || "尚未產出";
   resultBody.textContent = output?.body || "尚未產出";
   if (resultDescription) {
@@ -421,12 +523,26 @@ function renderResult(output) {
     resultSmsUrl.textContent = output?.url || "-";
     resultSmsUrl.href = output?.url || "#";
   }
+  renderGoogleAdsVariants(resultTitleVariants, googleHeadlineVariants, "Headline");
+  renderGoogleAdsVariants(resultBodyVariants, googleDescriptionVariants, "Description");
+  resultTitle.classList.toggle("is-hidden", activeTab === "google_ads" && googleHeadlineVariants.length > 0);
+  resultBody.classList.toggle("is-hidden", activeTab === "google_ads" && googleDescriptionVariants.length > 0);
   resultCard.classList.toggle("empty", !output);
   resultBody.classList.toggle("placeholder", !output?.body);
 
   resultCopyButtons.forEach((button) => {
     button.disabled = !output;
   });
+
+  if (copyTitleButton) {
+    copyTitleButton.disabled = !output || (activeTab === "google_ads" && googleHeadlineVariants.length > 0);
+  }
+
+  if (copyBodyButton) {
+    copyBodyButton.disabled = !output || (activeTab === "google_ads" && googleDescriptionVariants.length > 0);
+  }
+
+  updateCompactLabel(output);
 }
 
 function fitSmsFieldsToLimit(fields, maxChars = 70) {
@@ -464,10 +580,12 @@ function renderEmptyResult(tab = "primary") {
   applyResultLabels(TAB_LABELS[tab] || TAB_LABELS.primary);
   if (resultTitle) {
     resultTitle.textContent = "尚未產出";
+    resultTitle.classList.remove("is-hidden");
   }
   if (resultBody) {
     resultBody.textContent = tab === "primary" ? "送出表單後，會在這裡顯示完整廣告文案。" : "點擊上方 tab 後，會在這裡顯示對應渠道版本。";
     resultBody.classList.add("placeholder");
+    resultBody.classList.remove("is-hidden");
   }
   if (resultDescription) {
     resultDescription.textContent = "-";
@@ -492,12 +610,15 @@ function renderEmptyResult(tab = "primary") {
     resultSmsUrl.textContent = "-";
     resultSmsUrl.href = "#";
   }
+  renderGoogleAdsVariants(resultTitleVariants, [], "Headline");
+  renderGoogleAdsVariants(resultBodyVariants, [], "Description");
   if (resultCard) {
     resultCard.classList.add("empty");
   }
   resultCopyButtons.forEach((button) => {
     button.disabled = true;
   });
+  updateCompactLabel();
 }
 
 function renderLoadingResult(tab = "primary") {
@@ -505,10 +626,12 @@ function renderLoadingResult(tab = "primary") {
 
   if (resultTitle) {
     resultTitle.textContent = "文案產出中";
+    resultTitle.classList.remove("is-hidden");
   }
   if (resultBody) {
     resultBody.textContent = tab === "meta_ad" ? "正在整理 Meta 廣告欄位..." : tab === "google_ads" ? "正在整理 Google Ads 欄位..." : tab === "email" ? "正在整理 Email 欄位..." : tab === "line" ? "正在整理 LINE 欄位..." : "正在整理 SMS 欄位...";
     resultBody.classList.add("placeholder");
+    resultBody.classList.remove("is-hidden");
   }
   if (resultDescription) {
     resultDescription.textContent = tab === "meta_ad" || tab === "google_ads" || tab === "email" ? "文案產出中" : "-";
@@ -533,12 +656,15 @@ function renderLoadingResult(tab = "primary") {
     resultSmsUrl.textContent = "文案產出中";
     resultSmsUrl.href = "#";
   }
+  renderGoogleAdsVariants(resultTitleVariants, [], "Headline");
+  renderGoogleAdsVariants(resultBodyVariants, [], "Description");
   if (resultCard) {
     resultCard.classList.add("empty");
   }
   resultCopyButtons.forEach((button) => {
     button.disabled = true;
   });
+  updateCompactLabel();
 }
 
 function setActiveTab(tab, options = {}) {
@@ -886,9 +1012,41 @@ async function handleCopyField(field) {
 }
 
 function buildSmsCopyText() {
-  return [resultSmsTitle?.textContent || "", resultSmsBody?.textContent || "", resultSmsCta?.textContent || "", resultSmsUrl?.textContent || ""]
+  const title = resultSmsTitle?.textContent || "";
+  const body = resultSmsBody?.textContent || "";
+  const cta = resultSmsCta?.textContent || "";
+  const url = resultSmsUrl?.textContent || "";
+
+  return [
+    title,
+    body,
+    [cta, url].filter((value) => value && value !== "-").join("\n")
+  ]
     .filter((value) => value && value !== "-")
     .join("\n\n");
+}
+
+function updateCompactLabel(output) {
+  if (!resultCompactLabel) {
+    return;
+  }
+
+  if (activeTab === "sms") {
+    const totalChars = [
+      output?.title || resultSmsTitle?.textContent || "",
+      output?.body || resultSmsBody?.textContent || "",
+      output?.cta || resultSmsCta?.textContent || "",
+      output?.url || resultSmsUrl?.textContent || ""
+    ]
+      .filter((value) => value && value !== "-" && value !== "尚未產出" && value !== "文案產出中")
+      .join("")
+      .length;
+
+    resultCompactLabel.textContent = totalChars > 0 ? `SMS｜${totalChars}字` : "SMS";
+    return;
+  }
+
+  resultCompactLabel.textContent = activeTab === "line" ? "LINE" : "SMS";
 }
 
 function truncateTextHard(value, maxLength) {
@@ -942,8 +1100,111 @@ function appendUrlToMetaBody(body, url) {
   return [bodyWithoutUrl, normalizedUrl].filter(Boolean).join("\n\n");
 }
 
+function appendCtaAndUrlToMetaBody(body, cta, url) {
+  const normalizedBody = String(body || "").trim().replace(/\n{3,}/g, "\n\n");
+  const normalizedCta = String(cta || "").trim();
+  const normalizedUrl = String(url || "").trim();
+
+  return [
+    normalizedBody,
+    [normalizedCta, normalizedUrl].filter(Boolean).join("\n")
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeGoogleAdsPathSegment(value) {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/[/?#&=]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return truncateTextHard(normalized || "highlights", 15);
+}
+
+function buildGoogleAdsHeadlineVariants(data, masterDraft) {
+  const candidates = [
+    masterDraft?.hook,
+    `${data.productName}${data.benefits[0] ? `｜${data.benefits[0]}` : ""}`,
+    `${data.productName}${data.benefits[1] ? `｜${data.benefits[1]}` : ""}`,
+    `${data.productName}值得先看`,
+    `${data.benefits[0] || data.productName}先看`
+  ]
+    .map((item) => truncateTextHard(item, 30))
+    .filter(Boolean);
+
+  return collectUniqueItems(candidates).slice(0, 3);
+}
+
+function buildGoogleAdsDescriptionVariants(data, masterDraft) {
+  const candidates = [
+    `${masterDraft?.valueProp || data.benefits.slice(0, 2).join("、")}。`,
+    `${data.benefits[0] ? `先看 ${data.benefits[0]}` : data.productName}，重點更清楚。`,
+    `${data.benefits[1] ? `${data.benefits[1]} 也一起整理好。` : `${data.productName} 的重點已整理好。`}`,
+    `${data.productName}的重點一次看懂。`
+  ]
+    .map((item) => truncateTextHard(item, 90))
+    .filter(Boolean);
+
+  return collectUniqueItems(candidates).slice(0, 3);
+}
+
+function formatGoogleAdsVariantText(items) {
+  return items.map((item, index) => `${index + 1}. ${item}`).join("\n");
+}
+
+function collectUniqueItems(items) {
+  return Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
+}
+
+function parseGoogleAdsVariantText(value) {
+  return String(value || "")
+    .split(/\n+/)
+    .map((item) => item.replace(/^\d+\.\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function renderGoogleAdsVariants(container, items, label) {
+  if (!container) {
+    return;
+  }
+
+  if (!items.length || activeTab !== "google_ads") {
+    container.innerHTML = "";
+    container.classList.add("is-hidden");
+    return;
+  }
+
+  container.innerHTML = items
+    .map((item, index) => `
+      <div class="variant-item">
+        <div class="result-head">
+          <span class="variant-index">${label} ${index + 1}</span>
+          <button class="icon-copy-button" type="button" data-copy-variant="${encodeURIComponent(item)}" data-copy-label="${label} ${index + 1}" aria-label="複製 ${label} ${index + 1}">
+            <span aria-hidden="true">⧉</span>
+          </button>
+        </div>
+        <p class="variant-value">${escapeHtml(item)}</p>
+      </div>
+    `)
+    .join("");
+  container.classList.remove("is-hidden");
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function renderPageAnalysis(pageAnalysis) {
@@ -1003,6 +1264,7 @@ if (form) {
   renderPrompt(getFormData());
   setActiveTab("primary");
   renderEmptyResult("primary");
+  renderProductUrlPreview();
 }
 
 resultTabButtons.forEach((button) => {
@@ -1015,6 +1277,22 @@ copyDescriptionButton?.addEventListener("click", () => handleCopyField("descript
 copyCtaButton?.addEventListener("click", () => handleCopyField("cta"));
 copyUrlButton?.addEventListener("click", () => handleCopyField("url"));
 copySmsButton?.addEventListener("click", () => handleCopyField("sms"));
+resultTitleVariants?.addEventListener("click", async (event) => {
+  const button = event.target instanceof Element ? event.target.closest("[data-copy-variant]") : null;
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  await copyText(decodeURIComponent(button.dataset.copyVariant || ""), `${button.dataset.copyLabel || "Headline"}已複製到剪貼簿。`);
+});
+resultBodyVariants?.addEventListener("click", async (event) => {
+  const button = event.target instanceof Element ? event.target.closest("[data-copy-variant]") : null;
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  await copyText(decodeURIComponent(button.dataset.copyVariant || ""), `${button.dataset.copyLabel || "Description"}已複製到剪貼簿。`);
+});
 
 if (refreshPromptButton) {
   refreshPromptButton.addEventListener("click", () => {
@@ -1032,7 +1310,17 @@ voiceBalanceInput?.addEventListener("input", () => {
   schedulePromptRender();
 });
 
+domainPresetInput?.addEventListener("change", () => {
+  syncDomainPresetIntoUrl();
+  schedulePromptRender();
+});
+
+productUrlInput?.addEventListener("input", () => {
+  renderProductUrlPreview();
+});
+
 updateVoiceBalanceNote(voiceBalanceInput?.value || 3);
+renderProductUrlPreview();
 
 hydrateFromLastRun();
 checkHealth();

@@ -196,6 +196,24 @@ body {
   transform: translateY(-1px);
 }
 
+.field select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.92);
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.field select:focus {
+  outline: none;
+  border-color: rgba(255, 107, 157, 0.9);
+  box-shadow: 0 0 0 4px rgba(255, 107, 157, 0.14);
+  transform: translateY(-1px);
+}
+
 .fieldset {
   border: 0;
   padding: 0;
@@ -205,6 +223,55 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 0.85rem;
+}
+
+.url-builder {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.domain-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.45rem;
+  border-radius: 1.2rem;
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.09), rgba(26, 26, 94, 0.05));
+  border: 1px solid rgba(255, 107, 157, 0.1);
+}
+
+.domain-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 100%;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--pink-strong);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.field-hint,
+.field-preview {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.field-hint {
+  color: rgba(26, 26, 94, 0.62);
+}
+
+.field-preview {
+  color: rgba(26, 26, 94, 0.78);
+}
+
+.field-preview span {
+  color: var(--navy-deep);
+  font-weight: 700;
 }
 
 .benefit-grid {
@@ -499,14 +566,17 @@ body {
 }
 
 .output-card[data-channel="meta_ad"],
+.output-card[data-channel="google_ads"],
 .output-card[data-channel="email"] {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
 .output-card[data-channel="meta_ad"] .result-block,
 .output-card[data-channel="meta_ad"] .result-row > .result-block,
+.output-card[data-channel="google_ads"] .result-block,
+.output-card[data-channel="google_ads"] .result-row > .result-block,
 .output-card[data-channel="email"] .result-block,
 .output-card[data-channel="email"] .result-row > .result-block {
   padding: 1rem 1.05rem;
@@ -518,6 +588,9 @@ body {
 .output-card[data-channel="meta_ad"] .result-block-title,
 .output-card[data-channel="meta_ad"] .result-block-body,
 .output-card[data-channel="meta_ad"] .result-block-description,
+.output-card[data-channel="google_ads"] .result-block-title,
+.output-card[data-channel="google_ads"] .result-block-body,
+.output-card[data-channel="google_ads"] .result-block-description,
 .output-card[data-channel="email"] .result-block-title,
 .output-card[data-channel="email"] .result-block-body,
 .output-card[data-channel="email"] .result-block-description {
@@ -525,19 +598,50 @@ body {
 }
 
 .output-card[data-channel="meta_ad"] .result-row,
+.output-card[data-channel="google_ads"] .result-row,
 .output-card[data-channel="email"] .result-row {
-  grid-column: 1 / -1;
+  display: contents;
 }
 
 .output-card[data-channel="meta_ad"] #result-body,
 .output-card[data-channel="meta_ad"] #result-description,
 .output-card[data-channel="meta_ad"] #result-cta,
 .output-card[data-channel="meta_ad"] #result-url,
+.output-card[data-channel="google_ads"] #result-body,
+.output-card[data-channel="google_ads"] #result-description,
+.output-card[data-channel="google_ads"] #result-cta,
+.output-card[data-channel="google_ads"] #result-url,
 .output-card[data-channel="email"] #result-body,
 .output-card[data-channel="email"] #result-description,
 .output-card[data-channel="email"] #result-cta,
 .output-card[data-channel="email"] #result-url {
   font-size: 1rem;
+}
+
+.output-card[data-channel="meta_ad"] .result-block-url { order: 1; }
+.output-card[data-channel="meta_ad"] .result-block-body { order: 2; }
+.output-card[data-channel="meta_ad"] .result-block-title { order: 3; }
+.output-card[data-channel="meta_ad"] .result-block-description { order: 4; }
+
+.output-card[data-channel="google_ads"] .result-block-url { order: 1; }
+.output-card[data-channel="google_ads"] .result-block-description { order: 2; }
+.output-card[data-channel="google_ads"] .result-block-cta { order: 3; }
+.output-card[data-channel="google_ads"] .result-block-title { order: 4; }
+.output-card[data-channel="google_ads"] .result-block-body { order: 5; }
+
+.output-card[data-channel="email"] .result-block-description { order: 1; }
+.output-card[data-channel="email"] .result-block-title { order: 2; }
+.output-card[data-channel="email"] .result-block-body { order: 3; }
+
+.output-card[data-channel="google_ads"] #result-title,
+.output-card[data-channel="google_ads"] #result-body,
+.output-card[data-channel="meta_ad"] #result-title,
+.output-card[data-channel="email"] #result-title {
+  white-space: pre-line;
+  font-size: 1rem;
+  line-height: 1.8;
+  letter-spacing: 0;
+  font-weight: 400;
 }
 
 .output-card.is-compact-layout > .result-block:not(.result-block-sms),
@@ -553,11 +657,12 @@ body {
 }
 
 .result-block-sms .result-head {
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
 .sms-result-label {
-  display: none;
+  display: inline-block;
+  margin-bottom: 0;
 }
 
 .sms-combined-copy {
@@ -568,6 +673,10 @@ body {
 .sms-combined-copy p {
   display: grid;
   gap: 0;
+}
+
+.sms-tail {
+  gap: 0.1rem !important;
 }
 
 .sms-combined-copy span,
@@ -584,6 +693,34 @@ body {
 
 .sms-combined-copy span {
   white-space: pre-line;
+}
+
+.variant-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.variant-item {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.variant-index {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.64);
+  text-transform: uppercase;
+}
+
+.variant-value {
+  white-space: pre-line;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .result-head {
@@ -728,7 +865,12 @@ body {
   }
 
   .output-card[data-channel="meta_ad"],
+  .output-card[data-channel="google_ads"],
   .output-card[data-channel="email"] {
+    grid-template-columns: 1fr;
+  }
+
+  .domain-field {
     grid-template-columns: 1fr;
   }
 
