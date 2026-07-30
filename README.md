@@ -35,11 +35,11 @@ Worker 會把以下 payload 送到 copy engine endpoint：
 
 ```json
 {
-  "prompt": "...",
-  "product_name": "產品名稱",
+  "productName": "產品名稱",
   "benefits": ["優點 1", "優點 2", "優點 3"],
-  "product_url": "https://example.com",
-  "tone": "warm"
+  "productUrl": "https://example.com",
+  "tone": "brand",
+  "voiceBalance": 3
 }
 ```
 
@@ -105,7 +105,8 @@ live 模式現在的後端流程是：
   "productName": "產品名稱",
   "benefits": ["優點 1", "優點 2", "優點 3"],
   "productUrl": "https://example.com",
-  "tone": "warm"
+  "tone": "brand",
+  "voiceBalance": 3
 }
 ```
 
@@ -117,6 +118,12 @@ live 模式現在的後端流程是：
   "provider": "openai",
   "model": "gpt-4.1-mini",
   "prompt": "...",
+  "masterDraft": {
+    "hook": "...",
+    "valueProp": "...",
+    "cta": "...",
+    "url": "https://example.com"
+  },
   "pageAnalysis": {
     "sourceUrl": "https://example.com",
     "summary": "頁面摘要..."
@@ -125,6 +132,28 @@ live 模式現在的後端流程是：
     "title": "標題",
     "body": "主文內容",
     "cta": "CTA 文字",
+    "url": "https://example.com"
+  }
+}
+```
+
+### POST /api/format-copy
+
+```json
+{
+  "productName": "產品名稱",
+  "productUrl": "https://example.com",
+  "tone": "brand",
+  "voiceBalance": 3,
+  "channel": "line",
+  "masterDraft": {
+    "hook": "...",
+    "audienceAngle": "...",
+    "valueProp": "...",
+    "benefitPoints": ["..."],
+    "proofPoints": ["..."],
+    "cta": "...",
+    "toneNote": "...",
     "url": "https://example.com"
   }
 }

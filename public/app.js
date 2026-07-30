@@ -1,6 +1,8 @@
-const APP_VERSION = "2026-07-24-domain-preset-v1";
+const APP_VERSION = "2026-07-29-copy-layout-v2";
 const STORAGE_KEY = `lihi-copy-last-run:${APP_VERSION}`;
 const appConfig = window.APP_CONFIG || {};
+const GENERATE_COPY_TIMEOUT_MS = 120000;
+const FORMAT_COPY_TIMEOUT_MS = 45000;
 const DOMAIN_PRESET_BASES = {
   "copy.bktsai.link": "https://copy.bktsai.link",
   "lihi.io": "https://lihi.io",
@@ -13,6 +15,64 @@ const VOICE_BALANCE_PRESETS = {
   "3": "平衡：兼顧情境畫面與清楚價值。",
   "4": "偏理性：先把價值與重點講清楚，再留一點情緒與節奏。",
   "5": "偏理性很多：優先清楚、具體、好判斷，減少抒情與留白。"
+};
+const RANDOM_STYLE_PRESET_KEY = "random";
+const STYLE_PRESETS = {
+  home_healing: {
+    label: "回家療癒版",
+    note: "推開家門後那種終於可以好好吃一口、慢下來的溫暖感。",
+    prompt: "回家療癒版：主打回家、放鬆、安定、被照顧的情緒，畫面要有溫度。"
+  },
+  sharing_moment: {
+    label: "分享時刻版",
+    note: "聚焦和家人、朋友一起吃、一起分享的氛圍。",
+    prompt: "分享時刻版：把產品放進一起吃、一起聊、一起分享的場景，強調連結感。"
+  },
+  childhood_memory: {
+    label: "童年回憶版",
+    note: "走熟悉味道、記憶感、阿嬤媽媽餐桌那種親近感。",
+    prompt: "童年回憶版：帶出熟悉味道、從小記憶、家常安心感，但不要俗套。"
+  },
+  premium_brand: {
+    label: "高級品牌版",
+    note: "語氣更克制、有質感，像在講一個值得信任的品牌。",
+    prompt: "高級品牌版：語氣克制、質感、乾淨，不喊賣點，用品味與信任感建立價值。"
+  },
+  founder_story: {
+    label: "創辦人故事版",
+    note: "適合帶出為什麼做這個產品、背後堅持與初衷。",
+    prompt: "創辦人故事版：適度加入品牌初衷、堅持或做這件事的理由，讓產品更有人味。"
+  },
+  social_proof: {
+    label: "社群口碑版",
+    note: "更像大家真的會轉貼、推薦、說這個不錯的社群語感。",
+    prompt: "社群口碑版：語氣自然、有討論感，像使用者願意主動分享與推薦。"
+  },
+  scenario_solution: {
+    label: "場景解決方案版",
+    note: "把產品對應到具體生活情境，讓人立刻知道什麼時候會需要。",
+    prompt: "場景解決方案版：優先寫明什麼情境下會需要它、它如何幫你解決當下問題。"
+  },
+  rational_comparison: {
+    label: "理性對比版",
+    note: "更適合強調差異、選擇理由、判斷依據與重點整理。",
+    prompt: "理性對比版：清楚說明差異、優勢、選擇理由，偏理性、可判斷。"
+  },
+  gift_recommendation: {
+    label: "送禮推薦版",
+    note: "把產品包裝成送家人、送長輩、送客戶都體面的選擇。",
+    prompt: "送禮推薦版：強調體面、心意、好送、不失禮，讓人容易聯想到送禮情境。"
+  },
+  urgency_conversion: {
+    label: "限時轉單版",
+    note: "更直接、更促動行動，適合活動、限時、快速決策。",
+    prompt: "限時轉單版：節奏更快、行動更明確，優先降低猶豫、推進下單。"
+  }
+};
+const RANDOM_STYLE_PRESET_META = {
+  label: "隨機",
+  note: "每次按下產出時，系統都會從 10 種風格裡隨機挑 1 種。",
+  prompt: "隨機：送出時從既有風格版本中隨機選 1 種。"
 };
 
 const TAB_LABELS = {
@@ -34,8 +94,6 @@ const resultCard = document.querySelector("#result-card");
 
 const resultTitle = document.querySelector("#result-title");
 const resultBody = document.querySelector("#result-body");
-const resultTitleVariants = document.querySelector("#result-title-variants");
-const resultBodyVariants = document.querySelector("#result-body-variants");
 const resultDescription = document.querySelector("#result-description");
 const resultCta = document.querySelector("#result-cta");
 const resultUrl = document.querySelector("#result-url");
@@ -45,6 +103,8 @@ const resultDescriptionLabel = document.querySelector("#result-description-label
 const resultCtaLabel = document.querySelector("#result-cta-label");
 const resultUrlLabel = document.querySelector("#result-url-label");
 const resultDescriptionBlock = document.querySelector("#result-description-block");
+const resultGoogleAdsBlock = document.querySelector("#result-google-ads-block");
+const resultGoogleAdsGroups = document.querySelector("#result-google-ads-groups");
 const resultRow = document.querySelector(".result-row");
 const resultCtaBlock = document.querySelector(".result-block-cta");
 const resultUrlBlock = document.querySelector(".result-block-url");
@@ -77,20 +137,26 @@ const analysisPrices = document.querySelector("#analysis-prices");
 const analysisOcr = document.querySelector("#analysis-ocr");
 const voiceBalanceInput = document.querySelector("#voiceBalance");
 const voiceBalanceNote = document.querySelector("#voice-balance-note");
+const stylePresetInput = document.querySelector("#stylePreset");
+const stylePresetNote = document.querySelector("#style-preset-note");
 const domainPresetInput = document.querySelector("#domainPreset");
 const productUrlInput = document.querySelector("#productUrl");
-const productUrlPreview = document.querySelector("#product-url-preview span");
+const toggleUrlSettingsButton = document.querySelector("#toggle-url-settings");
+const urlSettingsPanel = document.querySelector("#url-settings-panel");
 
 const errorEls = {
   productName: document.querySelector('[data-error-for="productName"]'),
   benefits: document.querySelector('[data-error-for="benefits"]'),
   productUrl: document.querySelector('[data-error-for="productUrl"]'),
+  stylePreset: document.querySelector('[data-error-for="stylePreset"]'),
   tone: document.querySelector('[data-error-for="tone"]')
 };
 
 let promptRenderTimer = null;
 let activeTab = "primary";
 let currentRun = null;
+let copyFeedbackTimer = null;
+let activeCopyFeedbackButton = null;
 
 function getFormData() {
   if (!form) {
@@ -106,10 +172,13 @@ function getFormData() {
   return {
     productName: String(formData.get("productName") || "").trim(),
     benefits,
+    extraContext: String(formData.get("extraContext") || "").trim(),
+    stylePreset: normalizeStylePreset(formData.get("stylePreset")),
     domainPreset: normalizeDomainPreset(formData.get("domainPreset")),
     productUrl: normalizeProductUrl(formData.get("productUrl"), formData.get("domainPreset")),
     tone: String(formData.get("tone") || "").trim(),
-    voiceBalance: normalizeVoiceBalance(formData.get("voiceBalance"))
+    voiceBalance: normalizeVoiceBalance(formData.get("voiceBalance")),
+    complianceMode: normalizeComplianceMode(formData.get("complianceMode"))
   };
 }
 
@@ -118,12 +187,32 @@ function normalizeDomainPreset(value) {
   return Object.hasOwn(DOMAIN_PRESET_BASES, normalized) ? normalized : "copy.bktsai.link";
 }
 
+function normalizeStylePreset(value) {
+  const normalized = String(value || "").trim();
+  return normalized === RANDOM_STYLE_PRESET_KEY || Object.hasOwn(STYLE_PRESETS, normalized) ? normalized : RANDOM_STYLE_PRESET_KEY;
+}
+
+function getStylePresetMeta(value) {
+  const normalized = normalizeStylePreset(value);
+  if (normalized === RANDOM_STYLE_PRESET_KEY) {
+    return RANDOM_STYLE_PRESET_META;
+  }
+
+  return STYLE_PRESETS[normalized] || RANDOM_STYLE_PRESET_META;
+}
+
 function getDomainPresetBase(value) {
   return DOMAIN_PRESET_BASES[normalizeDomainPreset(value)] || "";
 }
 
 function looksLikeHostnamePath(value) {
-  return /^[^/\s]+\.[^/\s]+(?:[/:?#]|$)/.test(String(value || "").trim());
+  const raw = String(value || "").trim();
+  // 如果已經是完整網址（有 http:// 或 https://），直接回傳 true
+  if (/^https?:\/\//i.test(raw)) {
+    return true;
+  }
+  // 如果是 hostname + path 格式（例如 example.com/product），也回傳 true
+  return /^[^/\s]+\.[^/\s]+(?:[/:?#]|$)/.test(raw);
 }
 
 function joinBaseAndPath(base, value) {
@@ -147,24 +236,36 @@ function normalizeProductUrl(value, domainPreset) {
     return "";
   }
 
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) {
-    return raw;
-  }
-
-  if (raw.startsWith("//")) {
-    return `https:${raw}`;
-  }
-
+  let candidate = raw;
   if (looksLikeHostnamePath(raw)) {
-    return `https://${raw}`;
+    candidate = raw;
+  } else {
+    const presetBase = getDomainPresetBase(domainPreset);
+    if (presetBase) {
+      candidate = joinBaseAndPath(presetBase, raw);
+    }
   }
 
-  const presetBase = getDomainPresetBase(domainPreset);
-  if (presetBase) {
-    return joinBaseAndPath(presetBase, raw);
+  if (candidate.startsWith("//")) {
+    candidate = `https:${candidate}`;
+  } else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) {
+    candidate = `https://${candidate.replace(/^\/+/g, "")}`;
   }
 
-  return `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return "";
+    }
+
+    parsed.protocol = "https:";
+    parsed.username = "";
+    parsed.password = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
 }
 
 function normalizeVoiceBalance(value) {
@@ -176,6 +277,14 @@ function normalizeVoiceBalance(value) {
   return Math.min(5, Math.max(1, Math.round(parsed)));
 }
 
+function normalizeComplianceMode(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return String(value || "").toLowerCase() === "on" || String(value || "").toLowerCase() === "true";
+}
+
 function validate(data) {
   const errors = {};
 
@@ -183,20 +292,31 @@ function validate(data) {
     errors.productName = "產品名稱必填，且需在 80 字內。";
   }
 
-  if (!Array.isArray(data?.benefits) || data.benefits.length < 3 || data.benefits.length > 5) {
-    errors.benefits = "請提供 3 到 5 個產品優點。";
+  if (!Array.isArray(data?.benefits) || data.benefits.length < 3 || data.benefits.length > 4) {
+    errors.benefits = "請提供 3 到 4 個產品優點。";
   } else if (data.benefits.some((item) => item.length > 60)) {
     errors.benefits = "每個優點需在 60 字內。";
   }
 
-  try {
-    new URL(normalizeProductUrl(data?.productUrl || ""));
-  } catch {
-    errors.productUrl = "請輸入有效網址。";
+  const normalizedUrl = normalizeProductUrl(data?.productUrl || "", data?.domainPreset);
+  if (!normalizedUrl) {
+    errors.productUrl = "請輸入公開網域或網址，系統會自動補上 https://。";
+  } else if (normalizedUrl.length > 300) {
+    errors.productUrl = "網址需在 300 字內。";
+  } else if (!isAllowedPublicUrl(normalizedUrl)) {
+    errors.productUrl = "網址不可使用 localhost、內網 IP 或自訂 port。";
   }
 
   if (!["brand", "conversion"].includes(data?.tone || "")) {
     errors.tone = "請選擇文案風格。";
+  }
+
+  if (!(data?.stylePreset === RANDOM_STYLE_PRESET_KEY || Object.hasOwn(STYLE_PRESETS, data?.stylePreset || ""))) {
+    errors.stylePreset = "請選擇一個風格版本。";
+  }
+
+  if (data?.extraContext && data.extraContext.length > 600) {
+    errors.benefits = "其他想補充的內容需在 600 字內。";
   }
 
   return errors;
@@ -208,6 +328,112 @@ function renderErrors(errors) {
       el.textContent = errors[key] || "";
     }
   });
+}
+
+function isAllowedPublicUrl(value) {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") {
+      return false;
+    }
+
+    if (parsed.port && parsed.port !== "443") {
+      return false;
+    }
+
+    return !isBlockedHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isBlockedHostname(hostname) {
+  const normalized = String(hostname || "").trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  if (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized.endsWith(".local") ||
+    normalized.endsWith(".internal") ||
+    normalized === "metadata.google.internal"
+  ) {
+    return true;
+  }
+
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(normalized)) {
+    const [a = 0, b = 0] = normalized.split(".").map((item) => Number(item));
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+
+  if (normalized.includes(":")) {
+    return (
+      normalized === "::1" ||
+      normalized === "::" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe8") ||
+      normalized.startsWith("fe9") ||
+      normalized.startsWith("fea") ||
+      normalized.startsWith("feb")
+    );
+  }
+
+  return false;
+}
+
+function toSafeDisplayUrl(value) {
+  const normalized = normalizeProductUrl(value, "custom");
+  return isAllowedPublicUrl(normalized) ? normalized : "";
+}
+
+function setSafeLink(anchor, value) {
+  if (!anchor) {
+    return;
+  }
+
+  const safeUrl = toSafeDisplayUrl(value);
+  anchor.textContent = safeUrl || "-";
+  anchor.href = safeUrl || "#";
+}
+
+function getApiErrorMessage(result, fallbackMessage) {
+  if (Array.isArray(result?.errors) && result.errors.length) {
+    return result.errors[0];
+  }
+
+  if (typeof result?.message === "string" && result.message.trim()) {
+    return result.message.trim();
+  }
+
+  if (typeof result?.error === "string" && result.error.trim()) {
+    return result.error.trim();
+  }
+
+  return fallbackMessage;
+}
+
+function getPrimaryStatusMessage(result) {
+  const isLive = result.mode === "live" || result.mode === "openclaw";
+  const mismatch = result.pageAnalysis?.inputMismatch;
+
+  if (mismatch?.isSuspicious) {
+    return "文案已完成，但產品名稱和頁面資訊差異較大，請先確認網址和商品是否一致。";
+  }
+
+  return isLive ? "已完成主要文案。點擊右側 tab 可產出渠道版本。" : "目前為 mock 模式，已先完成主要文案。";
 }
 
 function getTonePromptText(tone) {
@@ -222,6 +448,14 @@ function getTonePromptText(tone) {
 
 function getVoiceBalancePromptText(voiceBalance) {
   return VOICE_BALANCE_PRESETS[String(normalizeVoiceBalance(voiceBalance))] || VOICE_BALANCE_PRESETS["3"];
+}
+
+function updateStylePresetNote(value) {
+  if (!stylePresetNote) {
+    return;
+  }
+
+  stylePresetNote.textContent = getStylePresetMeta(value).note;
 }
 
 function buildPrompt(data) {
@@ -240,12 +474,16 @@ function buildPrompt(data) {
 - 產品名稱：${data.productName || "{{product_name}}"}
 - 產品優點：
 ${benefitLines || "1. {{benefit_1}}\n2. {{benefit_2}}\n3. {{benefit_3}}"}
-- 導流網域：${getDomainPresetBase(data.domainPreset) || "自填完整網址"}
+- 其他想補充的內容：${data.extraContext || "無"}
+- 風格版本：${getStylePresetMeta(data.stylePreset).label}
+- 導流網域：${getDomainPresetBase(data.domainPreset) || "用自訂網域"}
 - 產品頁連結：${data.productUrl || "{{product_url}}"}
 - 文案風格：${data.tone || "{{tone}}"}
 - 感性 / 理性強度：${normalizeVoiceBalance(data.voiceBalance)}
+- 台灣食品廣告合規模式：${data.complianceMode ? "開啟" : "關閉"}
 
 風格規則：
+- ${getStylePresetMeta(data.stylePreset).prompt}
 - ${getTonePromptText(data.tone)}
 - ${getVoiceBalancePromptText(data.voiceBalance)}
 
@@ -254,12 +492,23 @@ ${benefitLines || "1. {{benefit_1}}\n2. {{benefit_2}}\n3. {{benefit_3}}"}
 2. 必須結合使用者提供的產品名稱、產品優點與產品頁資訊。
 3. 不要輸出多個版本，不要輸出分析、備註、前言、後記。
 4. 不要捏造未提供的具體數字、成效、保證。
-5. 廣告文案內不要提及任何價格、售價、原價、折扣、優惠價或金額。`;
+ 5. 廣告文案內不要提及任何價格、售價、原價、折扣、優惠價或金額。
+ 6. ${data.complianceMode ? "避免高風險與禁用詞，優先用中性、清楚、較不易誤解的食品廣告寫法。" : "若有法規需求，可開啟台灣食品廣告合規模式。"} `;
 }
 
 function buildMockPrimaryCopy(data) {
   const [primary, secondary, tertiary] = data.benefits;
   const voiceBalance = normalizeVoiceBalance(data.voiceBalance);
+
+  if (data.complianceMode) {
+    return {
+      title: `${data.productName}，把產品重點說清楚`,
+      body: `${data.productName} 會先根據產品頁與你提供的優點，整理成較中性、較不易誤解的廣告文案。\n\n重點會放在產品資訊、使用情境與閱讀清楚度，不碰高風險或禁用詞。`,
+      cta: "立即了解更多",
+      url: data.productUrl,
+      labels: TAB_LABELS.primary
+    };
+  }
 
   if (data.tone === "conversion") {
     return {
@@ -294,17 +543,6 @@ function updateVoiceBalanceNote(value) {
   voiceBalanceNote.textContent = getVoiceBalancePromptText(value);
 }
 
-function renderProductUrlPreview() {
-  if (!productUrlPreview) {
-    return;
-  }
-
-  const currentPreset = domainPresetInput?.value || "copy.bktsai.link";
-  const currentValue = productUrlInput?.value || "";
-  const normalizedUrl = normalizeProductUrl(currentValue, currentPreset);
-  productUrlPreview.textContent = normalizedUrl || getDomainPresetBase(currentPreset) || "尚未設定";
-}
-
 function syncDomainPresetIntoUrl() {
   if (!(productUrlInput instanceof HTMLInputElement) || !(domainPresetInput instanceof HTMLSelectElement)) {
     return;
@@ -314,25 +552,35 @@ function syncDomainPresetIntoUrl() {
   const presetBase = getDomainPresetBase(domainPresetInput.value);
 
   if (!presetBase) {
-    renderProductUrlPreview();
     return;
   }
 
   if (!raw) {
     productUrlInput.value = `${presetBase}/`;
-    renderProductUrlPreview();
     return;
   }
 
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) && !raw.startsWith("//") && !looksLikeHostnamePath(raw)) {
     productUrlInput.value = joinBaseAndPath(presetBase, raw);
   }
+}
 
-  renderProductUrlPreview();
+function setUrlSettingsOpen(isOpen) {
+  // 空函式，不做任何事
 }
 
 function buildMockChannelCopy(tab, data, masterDraft) {
   if (tab === "sms") {
+    if (data.complianceMode) {
+      return {
+        title: `${data.productName}重點`,
+        body: "先看產品資訊與使用情境。",
+        cta: "立即了解",
+        url: data.productUrl,
+        labels: TAB_LABELS.sms
+      };
+    }
+
     const smsCopy = fitSmsFieldsToLimit({
       title: masterDraft?.hook || `${data.productName}值得你看一眼`,
       body: `${data.productName}主打 ${data.benefits.slice(0, 2).join("、")}。現在就看看這次整理好的重點。`,
@@ -349,6 +597,16 @@ function buildMockChannelCopy(tab, data, masterDraft) {
   }
 
   if (tab === "line") {
+    if (data.complianceMode) {
+      return {
+        title: `${data.productName}重點`,
+        body: "先把產品資訊整理清楚，再決定是否適合你。",
+        cta: "點這裡看看",
+        url: data.productUrl,
+        labels: TAB_LABELS.line
+      };
+    }
+
     const lineCopy = fitCompactFieldsToLimit({
       title: masterDraft?.hook || `${data.productName}值得你看一眼`,
       body: `${data.productName}主打 ${data.benefits.slice(0, 2).join("、")}。現在就看看這次整理好的重點。`,
@@ -365,11 +623,30 @@ function buildMockChannelCopy(tab, data, masterDraft) {
   }
 
   if (tab === "email") {
+    if (data.complianceMode) {
+      const cta = "點開看看";
+      return {
+        title: truncateText(`${data.productName}產品資訊整理`, 28),
+        body: [`${data.productName} 這次先聚焦在產品資訊與使用情境。`, `也把整理後的重點放在前面，讓你更容易快速判斷。`, cta, data.productUrl].join("\n\n"),
+        description: truncateText("先看清楚產品重點", 36),
+        cta,
+        url: data.productUrl,
+        labels: TAB_LABELS.email
+      };
+    }
+
     const cta = "點開看看";
+    const detailLine = [data.benefits[0], data.benefits[1]].filter(Boolean).join("，");
     return {
       title: truncateText(masterDraft?.hook || `${data.productName}值得你打開看看`, 28),
       body: [truncateText(
-        `${masterDraft?.valueProp || data.benefits.slice(0, 2).join("、")}。${data.benefits[0] ? `這次想先跟你分享 ${data.benefits[0]}，也順手把重點整理得更清楚。` : ""}`,
+        [
+          masterDraft?.valueProp || data.benefits.slice(0, 2).join("、"),
+          detailLine,
+          data.benefits[2] || ""
+        ]
+          .filter(Boolean)
+          .join("。"),
         170
       ), cta, data.productUrl]
         .filter(Boolean)
@@ -382,6 +659,27 @@ function buildMockChannelCopy(tab, data, masterDraft) {
   }
 
   if (tab === "google_ads") {
+    if (data.complianceMode) {
+      const fallbackHeadlines = [
+        truncateTextHard(`${data.productName}重點整理`, 30),
+        truncateTextHard(`${data.productName}產品資訊`, 30),
+        truncateTextHard(`${data.productName}使用情境`, 30)
+      ];
+      const fallbackDescriptions = [
+        truncateTextHard("先看產品資訊與使用情境。", 90),
+        truncateTextHard("把重點先整理好，再決定也可以。", 90),
+        truncateTextHard("先快速看懂這款產品的核心重點。", 90)
+      ];
+      return {
+        title: formatGoogleAdsVariantText(fallbackHeadlines),
+        body: formatGoogleAdsVariantText(fallbackDescriptions),
+        description: normalizeGoogleAdsPathSegment(data.productName),
+        cta: normalizeGoogleAdsPathSegment("product-info"),
+        url: data.productUrl,
+        labels: TAB_LABELS.google_ads
+      };
+    }
+
     const headlineGroups = buildGoogleAdsHeadlineVariants(data, masterDraft);
     const descriptionGroups = buildGoogleAdsDescriptionVariants(data, masterDraft);
     return {
@@ -395,13 +693,26 @@ function buildMockChannelCopy(tab, data, masterDraft) {
   }
 
   const metaCta = "前往商品頁看看";
+  if (data.complianceMode) {
+    return {
+      title: truncateText(`${data.productName}重點整理`, 12),
+      body: appendUrlToMetaBody(normalizeMetaAdBodyLength([
+        "先看產品資訊與使用情境。",
+        "也把整理後的重點放在前面。"
+      ]), data.productUrl),
+      description: truncateText("先看產品資訊", 15),
+      cta: metaCta,
+      url: data.productUrl,
+      labels: TAB_LABELS.meta_ad
+    };
+  }
+
   return {
     title: truncateText(masterDraft?.hook || `${data.productName}，先把重點說清楚`, 12),
-    body: appendCtaAndUrlToMetaBody(
-      truncateText(`${masterDraft?.valueProp || data.benefits.slice(0, 2).join("、")}。\n\n重點優點：${data.benefits.slice(0, 2).join("、")}。`, 90),
-      metaCta,
-      data.productUrl
-    ),
+    body: appendUrlToMetaBody(normalizeMetaAdBodyLength([
+      `${masterDraft?.valueProp || data.benefits.slice(0, 2).join("、")}。`,
+      data.benefits[0] ? `這次也會把 ${data.benefits.slice(0, 2).join("、")} 這幾個重點整理清楚。` : ""
+    ].filter(Boolean)), data.productUrl),
     description: truncateText(data.benefits[0] || `${data.productName}重點整理`, 15),
     cta: metaCta,
     url: data.productUrl,
@@ -432,6 +743,7 @@ function applyResultLabels(labels = TAB_LABELS.primary) {
   const currentLabels = labels || TAB_LABELS.primary;
   const channel = activeTab || "primary";
   const hasDescriptionBlock = channel === "meta_ad" || channel === "google_ads" || channel === "email";
+  const showGoogleAdsGroups = channel === "google_ads";
   const isEmailTab = channel === "email";
   const isCompactTab = channel === "sms" || channel === "line";
   const showCtaBlock = !isCompactTab && channel !== "email" && channel !== "meta_ad";
@@ -462,6 +774,10 @@ function applyResultLabels(labels = TAB_LABELS.primary) {
     resultDescriptionBlock.classList.toggle("is-hidden", !hasDescriptionBlock);
   }
 
+  if (resultGoogleAdsBlock) {
+    resultGoogleAdsBlock.classList.toggle("is-hidden", !showGoogleAdsGroups);
+  }
+
   if (resultRow) {
     resultRow.classList.toggle("is-hidden", isCompactTab || (!showCtaBlock && !showUrlBlock));
   }
@@ -485,11 +801,6 @@ function applyResultLabels(labels = TAB_LABELS.primary) {
 
 function setTabLoadingState(isLoading) {
   resultTabButtons.forEach((button) => {
-    if (button.dataset.tab === "primary") {
-      button.disabled = false;
-      return;
-    }
-
     button.disabled = isLoading;
   });
 }
@@ -502,14 +813,13 @@ function renderResult(output) {
   applyResultLabels(output?.labels || TAB_LABELS[activeTab] || TAB_LABELS.primary);
   const googleHeadlineVariants = activeTab === "google_ads" ? parseGoogleAdsVariantText(output?.title) : [];
   const googleDescriptionVariants = activeTab === "google_ads" ? parseGoogleAdsVariantText(output?.body) : [];
-  resultTitle.textContent = output?.title || "尚未產出";
-  resultBody.textContent = output?.body || "尚未產出";
+  setTextContent(resultTitle, output?.title || "尚未產出");
+  renderBodyContent(output?.body || "尚未產出");
   if (resultDescription) {
-    resultDescription.textContent = output?.description || (activeTab === "meta_ad" || activeTab === "google_ads" || activeTab === "email" ? "待補欄位" : "-");
+    setTextContent(resultDescription, output?.description || (activeTab === "meta_ad" || activeTab === "google_ads" || activeTab === "email" ? "待補欄位" : "-"));
   }
-  resultCta.textContent = output?.cta || "-";
-  resultUrl.textContent = output?.url || "-";
-  resultUrl.href = output?.url || "#";
+  setTextContent(resultCta, output?.cta || "-");
+  setSafeLink(resultUrl, output?.url || "");
   if (resultSmsTitle) {
     resultSmsTitle.textContent = output?.title || "尚未產出";
   }
@@ -520,13 +830,12 @@ function renderResult(output) {
     resultSmsCta.textContent = output?.cta || "-";
   }
   if (resultSmsUrl) {
-    resultSmsUrl.textContent = output?.url || "-";
-    resultSmsUrl.href = output?.url || "#";
+    setSafeLink(resultSmsUrl, output?.url || "");
   }
-  renderGoogleAdsVariants(resultTitleVariants, googleHeadlineVariants, "Headline");
-  renderGoogleAdsVariants(resultBodyVariants, googleDescriptionVariants, "Description");
-  resultTitle.classList.toggle("is-hidden", activeTab === "google_ads" && googleHeadlineVariants.length > 0);
-  resultBody.classList.toggle("is-hidden", activeTab === "google_ads" && googleDescriptionVariants.length > 0);
+  renderGoogleAdsGroups(resultGoogleAdsGroups, googleHeadlineVariants, googleDescriptionVariants);
+  const isGoogleAdsTab = activeTab === "google_ads";
+  resultTitle.classList.toggle("is-hidden", isGoogleAdsTab);
+  resultBody.classList.toggle("is-hidden", isGoogleAdsTab);
   resultCard.classList.toggle("empty", !output);
   resultBody.classList.toggle("placeholder", !output?.body);
 
@@ -535,11 +844,11 @@ function renderResult(output) {
   });
 
   if (copyTitleButton) {
-    copyTitleButton.disabled = !output || (activeTab === "google_ads" && googleHeadlineVariants.length > 0);
+    copyTitleButton.disabled = !output || isGoogleAdsTab;
   }
 
   if (copyBodyButton) {
-    copyBodyButton.disabled = !output || (activeTab === "google_ads" && googleDescriptionVariants.length > 0);
+    copyBodyButton.disabled = !output || isGoogleAdsTab;
   }
 
   updateCompactLabel(output);
@@ -579,19 +888,19 @@ function fitSmsFieldsToLimit(fields, maxChars = 70) {
 function renderEmptyResult(tab = "primary") {
   applyResultLabels(TAB_LABELS[tab] || TAB_LABELS.primary);
   if (resultTitle) {
-    resultTitle.textContent = "尚未產出";
+    setTextContent(resultTitle, "尚未產出");
     resultTitle.classList.remove("is-hidden");
   }
   if (resultBody) {
-    resultBody.textContent = tab === "primary" ? "送出表單後，會在這裡顯示完整廣告文案。" : "點擊上方 tab 後，會在這裡顯示對應渠道版本。";
+    renderBodyContent(tab === "primary" ? "送出表單後，會在這裡顯示完整廣告文案。" : "點擊上方 tab 後，會在這裡顯示對應渠道版本。");
     resultBody.classList.add("placeholder");
     resultBody.classList.remove("is-hidden");
   }
   if (resultDescription) {
-    resultDescription.textContent = "-";
+    setTextContent(resultDescription, "-");
   }
   if (resultCta) {
-    resultCta.textContent = "-";
+    setTextContent(resultCta, "-");
   }
   if (resultUrl) {
     resultUrl.textContent = "-";
@@ -610,8 +919,7 @@ function renderEmptyResult(tab = "primary") {
     resultSmsUrl.textContent = "-";
     resultSmsUrl.href = "#";
   }
-  renderGoogleAdsVariants(resultTitleVariants, [], "Headline");
-  renderGoogleAdsVariants(resultBodyVariants, [], "Description");
+  renderGoogleAdsGroups(resultGoogleAdsGroups, [], []);
   if (resultCard) {
     resultCard.classList.add("empty");
   }
@@ -625,19 +933,19 @@ function renderLoadingResult(tab = "primary") {
   applyResultLabels(TAB_LABELS[tab] || TAB_LABELS.primary);
 
   if (resultTitle) {
-    resultTitle.textContent = "文案產出中";
+    setTextContent(resultTitle, "文案產出中");
     resultTitle.classList.remove("is-hidden");
   }
   if (resultBody) {
-    resultBody.textContent = tab === "meta_ad" ? "正在整理 Meta 廣告欄位..." : tab === "google_ads" ? "正在整理 Google Ads 欄位..." : tab === "email" ? "正在整理 Email 欄位..." : tab === "line" ? "正在整理 LINE 欄位..." : "正在整理 SMS 欄位...";
+    renderBodyContent(tab === "meta_ad" ? "正在整理 Meta 廣告欄位..." : tab === "google_ads" ? "正在整理 Google Ads 欄位..." : tab === "email" ? "正在整理 Email 欄位..." : tab === "line" ? "正在整理 LINE 欄位..." : "正在整理 SMS 欄位...");
     resultBody.classList.add("placeholder");
     resultBody.classList.remove("is-hidden");
   }
   if (resultDescription) {
-    resultDescription.textContent = tab === "meta_ad" || tab === "google_ads" || tab === "email" ? "文案產出中" : "-";
+    setTextContent(resultDescription, tab === "meta_ad" || tab === "google_ads" || tab === "email" ? "文案產出中" : "-");
   }
   if (resultCta) {
-    resultCta.textContent = "文案產出中";
+    setTextContent(resultCta, "文案產出中");
   }
   if (resultUrl) {
     resultUrl.textContent = "文案產出中";
@@ -656,8 +964,7 @@ function renderLoadingResult(tab = "primary") {
     resultSmsUrl.textContent = "文案產出中";
     resultSmsUrl.href = "#";
   }
-  renderGoogleAdsVariants(resultTitleVariants, [], "Headline");
-  renderGoogleAdsVariants(resultBodyVariants, [], "Description");
+  renderGoogleAdsGroups(resultGoogleAdsGroups, [], []);
   if (resultCard) {
     resultCard.classList.add("empty");
   }
@@ -761,7 +1068,10 @@ function hydrateFromLastRun() {
 
 function buildRunState(result, input) {
   return {
-    input,
+    input: {
+      ...input,
+      stylePreset: result.stylePreset || input.stylePreset
+    },
     mode: result.mode,
     prompt: result.prompt,
     pageAnalysis: result.pageAnalysis,
@@ -796,6 +1106,27 @@ function getApiUrl(path) {
   const base = appConfig.apiBaseUrl || "./api/";
   const normalizedBase = base.endsWith("/") ? base : `${base}/`;
   return new URL(path, new URL(normalizedBase, window.location.href)).toString();
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    const result = await response.json();
+    return { response, result };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("請求等待太久，已自動停止。");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 async function handleSubmit(event) {
@@ -833,15 +1164,18 @@ async function handleSubmit(event) {
   }
 
   try {
-    const response = await fetch(getApiUrl("generate-copy"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
-    const result = await response.json();
+    const { response, result } = await fetchJsonWithTimeout(
+      getApiUrl("generate-copy"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      },
+      GENERATE_COPY_TIMEOUT_MS
+    );
 
     if (!response.ok || !result.ok) {
-      throw new Error(result.error || "產生文案時發生錯誤。");
+      throw new Error(getApiErrorMessage(result, "產生文案時發生錯誤。"));
     }
 
     currentRun = buildRunState(result, data);
@@ -851,7 +1185,7 @@ async function handleSubmit(event) {
     saveLastRun(currentRun);
 
     if (statusEl) {
-      statusEl.textContent = result.mode === "live" || result.mode === "openclaw" ? "已完成主要文案。點擊右側 tab 可產出渠道版本。" : "目前為 mock 模式，已先完成主要文案。";
+      statusEl.textContent = getPrimaryStatusMessage(result);
     }
   } catch (error) {
     const fallback = buildMockPrimaryCopy(data);
@@ -877,7 +1211,7 @@ async function handleSubmit(event) {
     saveLastRun(currentRun);
 
     if (statusEl) {
-      statusEl.textContent = "目前沒有可用後端，已先用 mock 產出主要文案。";
+      statusEl.textContent = error instanceof Error && error.message ? error.message : "目前沒有可用後端，已先用 mock 產出主要文案。";
     }
   } finally {
     if (submitButton) {
@@ -920,22 +1254,27 @@ async function handleTabClick(tab) {
   }
 
   try {
-    const response = await fetch(getApiUrl("format-copy"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        productName: currentRun.input.productName,
-        productUrl: currentRun.input.productUrl,
-        tone: currentRun.input.tone,
-        voiceBalance: currentRun.input.voiceBalance,
-        channel: tab,
-        masterDraft: currentRun.masterDraft
-      })
-    });
-    const result = await response.json();
+    const { response, result } = await fetchJsonWithTimeout(
+      getApiUrl("format-copy"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName: currentRun.input.productName,
+          productUrl: currentRun.input.productUrl,
+          stylePreset: currentRun.input.stylePreset,
+          tone: currentRun.input.tone,
+          voiceBalance: currentRun.input.voiceBalance,
+          complianceMode: currentRun.input.complianceMode,
+          channel: tab,
+          masterDraft: currentRun.masterDraft
+        })
+      },
+      FORMAT_COPY_TIMEOUT_MS
+    );
 
     if (!response.ok || !result.ok) {
-      throw new Error(result.error || "產出渠道文案時發生錯誤。");
+      throw new Error(getApiErrorMessage(result, "產出渠道文案時發生錯誤。"));
     }
 
     currentRun.outputs[tab] = result.output;
@@ -952,45 +1291,95 @@ async function handleTabClick(tab) {
     saveLastRun(currentRun);
 
     if (statusEl) {
-      statusEl.textContent = `目前先用 fallback 產出 ${getChannelDisplayName(tab)} 文案。`;
+      statusEl.textContent = error instanceof Error && error.message ? error.message : `目前先用 fallback 產出 ${getChannelDisplayName(tab)} 文案。`;
     }
   } finally {
     setTabLoadingState(false);
   }
 }
 
-async function copyText(value, successMessage) {
+function showCopySuccess(button) {
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  if (copyFeedbackTimer) {
+    window.clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = null;
+  }
+
+  if (activeCopyFeedbackButton instanceof HTMLButtonElement) {
+    activeCopyFeedbackButton.classList.remove("is-success");
+    const activeIcon = activeCopyFeedbackButton.querySelector("span[aria-hidden='true']");
+    if (activeIcon) {
+      activeIcon.textContent = "⧉";
+    }
+  }
+
+  resultCopyButtons.forEach((item) => {
+    if (!(item instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    const icon = item.querySelector("span[aria-hidden='true']");
+    item.classList.remove("is-success");
+    if (icon) {
+      icon.textContent = "⧉";
+    }
+  });
+
+  button.classList.add("is-success");
+  const icon = button.querySelector("span[aria-hidden='true']");
+  if (icon) {
+    icon.textContent = "✓";
+  }
+  activeCopyFeedbackButton = button;
+
+  copyFeedbackTimer = window.setTimeout(() => {
+    button.classList.remove("is-success");
+    if (icon) {
+      icon.textContent = "⧉";
+    }
+    if (activeCopyFeedbackButton === button) {
+      activeCopyFeedbackButton = null;
+    }
+    copyFeedbackTimer = null;
+  }, 1200);
+}
+
+async function copyText(value, successMessage, button) {
   if (!value) {
     return;
   }
 
   await navigator.clipboard.writeText(value);
+  showCopySuccess(button);
 
   if (statusEl) {
     statusEl.textContent = successMessage;
   }
 }
 
-async function handleCopyField(field) {
+async function handleCopyField(field, button) {
   if (!resultTitle || !resultBody || !resultCta || !resultUrl) {
     return;
   }
 
   const copyMap = {
     title: {
-      value: resultTitle.textContent,
+      value: getCopyValue(resultTitle),
       message: `${resultTitleLabel?.textContent || "標題"}已複製到剪貼簿。`
     },
     body: {
-      value: resultBody.textContent,
+      value: getCopyValue(resultBody),
       message: `${resultBodyLabel?.textContent || "主文"}已複製到剪貼簿。`
     },
     description: {
-      value: resultDescription?.textContent || "",
+      value: getCopyValue(resultDescription),
       message: `${resultDescriptionLabel?.textContent || "Description"}已複製到剪貼簿。`
     },
     cta: {
-      value: resultCta.textContent,
+      value: getCopyValue(resultCta),
       message: `${resultCtaLabel?.textContent || "CTA"}已複製到剪貼簿。`
     },
     url: {
@@ -1008,13 +1397,13 @@ async function handleCopyField(field) {
     return;
   }
 
-  await copyText(target.value, target.message);
+  await copyText(target.value, target.message, button);
 }
 
 function buildSmsCopyText() {
-  const title = resultSmsTitle?.textContent || "";
-  const body = resultSmsBody?.textContent || "";
-  const cta = resultSmsCta?.textContent || "";
+  const title = getCopyValue(resultSmsTitle);
+  const body = getCopyValue(resultSmsBody);
+  const cta = getCopyValue(resultSmsCta);
   const url = resultSmsUrl?.textContent || "";
 
   return [
@@ -1160,6 +1549,49 @@ function formatGoogleAdsVariantText(items) {
   return items.map((item, index) => `${index + 1}. ${item}`).join("\n");
 }
 
+function normalizeMetaAdBodyLength(textOrParagraphs, minChars = 120, maxChars = 150) {
+  const sentences = Array.isArray(textOrParagraphs)
+    ? textOrParagraphs.map((item) => String(item || "").trim()).filter(Boolean)
+    : String(textOrParagraphs || "")
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const compact = sentences.join("");
+
+  if (!compact) {
+    return "";
+  }
+
+  if (compact.length <= maxChars) {
+    if (compact.length >= minChars || sentences.length === 1) {
+      return sentences.join("\n\n");
+    }
+
+    const filler = ensureSentence("也把閱讀重點排得更清楚，讓你更快掌握這次真正該先看的內容");
+    return normalizeMetaAdBodyLength([...sentences, filler], minChars, maxChars);
+  }
+
+  const trimmed = [];
+  let used = 0;
+  for (const sentence of sentences) {
+    if (!sentence) {
+      continue;
+    }
+    if (used + sentence.length <= maxChars) {
+      trimmed.push(sentence);
+      used += sentence.length;
+      continue;
+    }
+    const remain = maxChars - used;
+    if (remain > 0) {
+      trimmed.push(truncateText(sentence, remain));
+    }
+    break;
+  }
+
+  return trimmed.join("\n\n");
+}
+
 function collectUniqueItems(items) {
   return Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
 }
@@ -1171,31 +1603,89 @@ function parseGoogleAdsVariantText(value) {
     .filter(Boolean);
 }
 
-function renderGoogleAdsVariants(container, items, label) {
+function renderGoogleAdsGroups(container, headlineItems, descriptionItems) {
   if (!container) {
     return;
   }
 
-  if (!items.length || activeTab !== "google_ads") {
+  const headlineBlocks = headlineItems.slice(0, 3).map((value, index) => ({
+    label: `headline ${index + 1}`,
+    value
+  }));
+  const descriptionBlocks = descriptionItems.slice(0, 3).map((value, index) => ({
+    label: `description ${index + 1}`,
+    value
+  }));
+  const blocks = [...headlineBlocks, ...descriptionBlocks];
+
+  if (!blocks.length || activeTab !== "google_ads") {
     container.innerHTML = "";
     container.classList.add("is-hidden");
     return;
   }
 
-  container.innerHTML = items
-    .map((item, index) => `
-      <div class="variant-item">
-        <div class="result-head">
-          <span class="variant-index">${label} ${index + 1}</span>
-          <button class="icon-copy-button" type="button" data-copy-variant="${encodeURIComponent(item)}" data-copy-label="${label} ${index + 1}" aria-label="複製 ${label} ${index + 1}">
-            <span aria-hidden="true">⧉</span>
-          </button>
-        </div>
-        <p class="variant-value">${escapeHtml(item)}</p>
+  container.innerHTML = blocks.map(({ label, value }) => `
+    <div class="variant-item google-ads-variant-item">
+      <div class="result-head">
+        <span class="variant-index">${escapeHtml(label)}</span>
+        <button class="icon-copy-button" type="button" data-copy-variant="${encodeURIComponent(value)}" data-copy-label="${escapeHtml(label)}" aria-label="複製 ${escapeHtml(label)}" ${value ? "" : "disabled"}>
+          <span aria-hidden="true">⧉</span>
+        </button>
       </div>
-    `)
-    .join("");
+      <p class="variant-value">${escapeHtml(value || "待補欄位")}</p>
+    </div>
+  `).join("");
   container.classList.remove("is-hidden");
+}
+
+function setTextContent(element, value) {
+  if (!(element instanceof HTMLElement)) {
+    return;
+  }
+
+  const text = String(value || "");
+  element.textContent = text;
+  element.dataset.copyValue = text;
+}
+
+function getCopyValue(element) {
+  if (!(element instanceof HTMLElement)) {
+    return "";
+  }
+
+  return element.dataset.copyValue || element.textContent || "";
+}
+
+function shouldUseParagraphBodyLayout() {
+  return activeTab === "primary" || activeTab === "meta_ad" || activeTab === "email";
+}
+
+function renderBodyContent(value) {
+  if (!(resultBody instanceof HTMLElement)) {
+    return;
+  }
+
+  const text = String(value || "");
+  resultBody.dataset.copyValue = text;
+
+  if (!shouldUseParagraphBodyLayout()) {
+    resultBody.textContent = text;
+    return;
+  }
+
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!paragraphs.length) {
+    resultBody.textContent = text;
+    return;
+  }
+
+  resultBody.innerHTML = paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+    .join("");
 }
 
 function escapeHtml(value) {
@@ -1218,7 +1708,9 @@ function renderPageAnalysis(pageAnalysis) {
   }
 
   analysisCard.classList.remove("empty");
-  analysisSummary.textContent = pageAnalysis.summary || "這次沒有抓到可用的頁面摘要。";
+  analysisSummary.textContent = pageAnalysis.inputMismatch?.isSuspicious
+    ? `${pageAnalysis.inputMismatch.reason}。${pageAnalysis.summary || ""}`.trim()
+    : pageAnalysis.summary || "這次沒有抓到可用的頁面摘要。";
   analysisMeta.textContent = [pageAnalysis.title, pageAnalysis.metaDescription].filter(Boolean).join(" / ") || "這次沒有抓到頁面標題或描述。";
   analysisPrices.textContent = Array.isArray(pageAnalysis.priceSignals) && pageAnalysis.priceSignals.length ? pageAnalysis.priceSignals.join(" / ") : "這次沒有抓到明確的價格或組合訊號。";
 
@@ -1264,34 +1756,25 @@ if (form) {
   renderPrompt(getFormData());
   setActiveTab("primary");
   renderEmptyResult("primary");
-  renderProductUrlPreview();
 }
 
 resultTabButtons.forEach((button) => {
   button.addEventListener("click", () => handleTabClick(button.dataset.tab));
 });
 
-copyTitleButton?.addEventListener("click", () => handleCopyField("title"));
-copyBodyButton?.addEventListener("click", () => handleCopyField("body"));
-copyDescriptionButton?.addEventListener("click", () => handleCopyField("description"));
-copyCtaButton?.addEventListener("click", () => handleCopyField("cta"));
-copyUrlButton?.addEventListener("click", () => handleCopyField("url"));
-copySmsButton?.addEventListener("click", () => handleCopyField("sms"));
-resultTitleVariants?.addEventListener("click", async (event) => {
+copyTitleButton?.addEventListener("click", () => handleCopyField("title", copyTitleButton));
+copyBodyButton?.addEventListener("click", () => handleCopyField("body", copyBodyButton));
+copyDescriptionButton?.addEventListener("click", () => handleCopyField("description", copyDescriptionButton));
+copyCtaButton?.addEventListener("click", () => handleCopyField("cta", copyCtaButton));
+copyUrlButton?.addEventListener("click", () => handleCopyField("url", copyUrlButton));
+copySmsButton?.addEventListener("click", () => handleCopyField("sms", copySmsButton));
+resultGoogleAdsGroups?.addEventListener("click", async (event) => {
   const button = event.target instanceof Element ? event.target.closest("[data-copy-variant]") : null;
   if (!(button instanceof HTMLButtonElement)) {
     return;
   }
 
-  await copyText(decodeURIComponent(button.dataset.copyVariant || ""), `${button.dataset.copyLabel || "Headline"}已複製到剪貼簿。`);
-});
-resultBodyVariants?.addEventListener("click", async (event) => {
-  const button = event.target instanceof Element ? event.target.closest("[data-copy-variant]") : null;
-  if (!(button instanceof HTMLButtonElement)) {
-    return;
-  }
-
-  await copyText(decodeURIComponent(button.dataset.copyVariant || ""), `${button.dataset.copyLabel || "Description"}已複製到剪貼簿。`);
+  await copyText(decodeURIComponent(button.dataset.copyVariant || ""), `${button.dataset.copyLabel || "Google Ads 文案"}已複製到剪貼簿。`, button);
 });
 
 if (refreshPromptButton) {
@@ -1310,17 +1793,23 @@ voiceBalanceInput?.addEventListener("input", () => {
   schedulePromptRender();
 });
 
+stylePresetInput?.addEventListener("change", () => {
+  updateStylePresetNote(stylePresetInput.value);
+  schedulePromptRender();
+});
+
 domainPresetInput?.addEventListener("change", () => {
   syncDomainPresetIntoUrl();
   schedulePromptRender();
 });
 
-productUrlInput?.addEventListener("input", () => {
-  renderProductUrlPreview();
+toggleUrlSettingsButton?.addEventListener("click", () => {
+  // 空按鈕，什麼都不做
 });
 
 updateVoiceBalanceNote(voiceBalanceInput?.value || 3);
-renderProductUrlPreview();
+updateStylePresetNote(stylePresetInput?.value || RANDOM_STYLE_PRESET_KEY);
+setUrlSettingsOpen(false);
 
 hydrateFromLastRun();
 checkHealth();

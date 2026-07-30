@@ -24,63 +24,86 @@
           </div>
 
           <div class="field-row">
-            <label class="field">
+            <label class="field field-product-name">
               <span>產品名稱</span>
               <input id="productName" name="productName" type="text" maxlength="80" placeholder="例如：南瓜濃湯" required />
               <small class="error" data-error-for="productName"></small>
             </label>
 
-            <label class="field">
-              <span>產品頁連結</span>
+            <label class="field field-url-group">
               <div class="url-builder">
-                <div class="domain-field">
-                  <label class="domain-label" for="domainPreset">選網域</label>
-                  <select id="domainPreset" name="domainPreset">
+                <div class="url-input-header">
+                  <span>產品頁連結</span>
+                </div>
+                <div class="url-input-row">
+                  <input id="productUrl" name="productUrl" type="text" maxlength="300" placeholder="請輸入產品頁面連結" required />
+                  <button class="url-settings-button" type="button" id="toggle-url-settings" aria-expanded="false" aria-controls="url-settings-panel" disabled>設定網址</button>
+                </div>
+                <div class="field field-subfield url-settings-panel is-hidden" id="url-settings-panel">
+                  <span>網址設定</span>
+                  <select id="domainPreset" name="domainPreset" disabled>
                     <option value="copy.bktsai.link" selected>copy.bktsai.link</option>
                     <option value="lihi.io">lihi.io</option>
                     <option value="howlihi.com">howlihi.com</option>
-                    <option value="custom">自填完整網址</option>
+                    <option value="custom">用自訂網域</option>
                   </select>
                 </div>
-                <input id="productUrl" name="productUrl" type="text" placeholder="campaign/mockup-demo 或完整網址" required />
               </div>
-              <p class="field-hint">先選網域，再填 path；如果已經有完整網址，也可以直接貼上覆蓋。</p>
-              <p class="field-preview" id="product-url-preview">預覽網址：<span>https://copy.bktsai.link/</span></p>
               <small class="error" data-error-for="productUrl"></small>
             </label>
           </div>
 
           <fieldset class="fieldset">
-            <legend>產品優點（至少 3 個）</legend>
             <div class="benefit-grid" id="benefits-group">
               <label class="field">
-                <span>優點 1</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="天然食材" required />
+                <span>產品優點1 (至少3個)</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="純天然食材" required />
               </label>
               <label class="field">
-                <span>優點 2</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="無添加糖" required />
+                <span>產品優點2</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="10年熬煮經驗, 每日熬煮6小時" required />
               </label>
               <label class="field">
-                <span>優點 3</span>
+                <span>產品優點3</span>
                 <input name="benefit" type="text" maxlength="60" placeholder="適合 2-3 人享用" required />
               </label>
+              <label class="field">
+                <span>產品優點4</span>
+                <input name="benefit" type="text" maxlength="60" placeholder="選填" />
+              </label>
             </div>
-            <details class="extra-benefits">
-              <summary>補充第 4、5 個優點</summary>
-              <div class="benefit-grid benefit-grid-optional">
-                <label class="field">
-                  <span>優點 4</span>
-                  <input name="benefit" type="text" maxlength="60" placeholder="選填" />
-                </label>
-                <label class="field">
-                  <span>優點 5</span>
-                  <input name="benefit" type="text" maxlength="60" placeholder="選填" />
-                </label>
-              </div>
-            </details>
             <small class="error" data-error-for="benefits"></small>
           </fieldset>
+
+          <label class="field">
+            <span>其他想補充的內容</span>
+            <textarea
+              id="extraContext"
+              name="extraContext"
+              rows="4"
+              maxlength="600"
+              placeholder="選填，例如品牌口吻、特別想強調的賣點、想避開的說法、目標受眾、活動背景..."
+            ></textarea>
+          </label>
+
+          <label class="field">
+            <span>風格版本</span>
+            <select id="stylePreset" name="stylePreset">
+              <option value="random" selected>隨機</option>
+              <option value="home_healing">回家療癒版</option>
+              <option value="sharing_moment">分享時刻版</option>
+              <option value="childhood_memory">童年回憶版</option>
+              <option value="premium_brand">高級品牌版</option>
+              <option value="founder_story">創辦人故事版</option>
+              <option value="social_proof">社群口碑版</option>
+              <option value="scenario_solution">場景解決方案版</option>
+              <option value="rational_comparison">理性對比版</option>
+              <option value="gift_recommendation">送禮推薦版</option>
+              <option value="urgency_conversion">限時轉單版</option>
+            </select>
+            <p class="field-note" id="style-preset-note">每次按下產出時，系統都會從 10 種風格裡隨機挑 1 種。</p>
+            <small class="error" data-error-for="stylePreset"></small>
+          </label>
 
           <fieldset class="fieldset">
             <legend>文案風格</legend>
@@ -114,6 +137,18 @@
               </div>
               <p class="voice-meter-note" id="voice-balance-note">平衡：兼顧情境畫面與清楚價值。</p>
             </div>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>法規模式</legend>
+            <label class="compliance-card" for="complianceMode">
+              <input id="complianceMode" name="complianceMode" type="checkbox" />
+              <span class="compliance-card-body">
+                <span class="compliance-card-title">台灣食品廣告合規模式</span>
+                <span class="compliance-card-copy">勾選後，會避開高風險與禁用詞，優先產出較符合台灣食品廣告紅線的文案。</span>
+                <span class="compliance-card-note">這是降低風險模式，不等於正式法律意見；上稿前仍建議人工審稿。</span>
+              </span>
+            </label>
           </fieldset>
 
           <div class="actions">
@@ -161,7 +196,6 @@
                 </button>
               </div>
               <h3 id="result-title">尚未產出</h3>
-              <div class="variant-list is-hidden" id="result-title-variants"></div>
             </div>
             <div class="result-block result-block-body">
               <div class="result-head">
@@ -170,8 +204,13 @@
                   <span aria-hidden="true">⧉</span>
                 </button>
               </div>
-              <p id="result-body">送出表單後，會在這裡顯示完整廣告文案。</p>
-              <div class="variant-list is-hidden" id="result-body-variants"></div>
+              <div id="result-body">送出表單後，會在這裡顯示完整廣告文案。</div>
+            </div>
+            <div class="result-block result-block-google-ads is-hidden" id="result-google-ads-block">
+              <div class="result-head">
+                <span class="result-label">Google Ads 文案</span>
+              </div>
+              <div class="google-ads-group-list" id="result-google-ads-groups"></div>
             </div>
             <div class="result-block result-block-description is-hidden" id="result-description-block">
               <div class="result-head">
@@ -206,7 +245,7 @@
         </section>
       </section>
     </main>
-    <script src="./config.js?v=20260724a"></script>
-    <script src="./app.js?v=20260724a"></script>
+    <script src="./config.js?v=20260729a"></script>
+    <script src="./app.js?v=20260730a"></script>
   </body>
 </html>
