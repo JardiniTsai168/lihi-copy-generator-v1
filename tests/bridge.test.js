@@ -323,6 +323,10 @@ test("normalizeTraditionalChineseText converts common simplified Chinese to trad
     bridge.normalizeTraditionalChineseText("花 30 秒選好礼，這不是成分的组合。"),
     "花 30 秒選好禮，這不是成分的組合。"
   );
+  assert.equal(
+    bridge.normalizeTraditionalChineseText("专业营养团队已为你整理这页重点，帮助用户更快读懂。"),
+    "專業營養團隊已為你整理這頁重點，幫助用戶更快讀懂。"
+  );
 });
 
 test("parseChannelCopyOutput strips scaffolding wording and simplified Chinese", () => {
@@ -342,6 +346,24 @@ test("parseChannelCopyOutput strips scaffolding wording and simplified Chinese",
   assert.equal(output.body.includes("銷售頁面明確標示"), false);
   assert.match(output.body, /無加糖、無人工調味、無防腐劑。/);
   assert.match(output.body, /讓你更快看懂重點。/);
+});
+
+test("parseChannelCopyOutput normalizes broader simplified Chinese marketing wording", () => {
+  const bridge = loadBridgeModule();
+  const output = bridge.parseChannelCopyOutput(
+    JSON.stringify({
+      title: "专业团队为你整理这页重点",
+      body: "帮助用户更快读懂产品亮点，适合先看再决定。\n\n欢迎直接点开链接了解。",
+      cta: "立即查看更多",
+      url: "https://lihi.io/product"
+    }),
+    "primary",
+    "https://lihi.io/product"
+  );
+
+  assert.equal(output.title, "專業團隊為你整理這頁重點");
+  assert.match(output.body, /幫助用戶更快讀懂產品亮點，適合先看再決定。/);
+  assert.match(output.body, /歡迎直接點開連結了解。/);
 });
 
 test("parseChannelCopyOutput strips report-style transitions", () => {
