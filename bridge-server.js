@@ -69,6 +69,17 @@ const RANDOM_STYLE_PRESET_META = {
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "qwen/qwen3.5-plus-02-15";
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1/chat/completions";
+const IMAGE_API_BASE_URL = process.env.IMAGE_API_BASE_URL || "https://openrouter.ai/api/v1/images";
+const APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || "https://coloring.bktsai.link";
+const COLORING_IMAGE_MODEL = process.env.COLORING_IMAGE_MODEL || "openai/gpt-5.4-image-2";
+const COLORING_IMAGE_TIMEOUT_MS = Number(process.env.COLORING_IMAGE_TIMEOUT_MS || 300000);
+const COLORING_IMAGE_ASPECT_RATIO = process.env.COLORING_IMAGE_ASPECT_RATIO || "3:4";
+const COLORING_IMAGE_QUALITY = process.env.COLORING_IMAGE_QUALITY || "low";
+const COLORING_ALLOWED_MODEL_QUALITIES = {
+  "openai/gpt-5.4-image-2": ["low"]
+};
+const COLORING_IMAGE_INPUT_PRICE_PER_MILLION = Number(process.env.COLORING_IMAGE_INPUT_PRICE_PER_MILLION || 8);
+const COLORING_IMAGE_OUTPUT_PRICE_PER_MILLION = Number(process.env.COLORING_IMAGE_OUTPUT_PRICE_PER_MILLION || 15);
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 60000);
 const CHANNEL_FORMATTER_TIMEOUT_MS = Number(process.env.CHANNEL_FORMATTER_TIMEOUT_MS || Math.min(OPENAI_TIMEOUT_MS, 25000));
 const OPENAI_REASONING_MAX_TOKENS = Number(process.env.OPENAI_REASONING_MAX_TOKENS || 128);
@@ -93,11 +104,24 @@ const SCREENSHOTONE_FULL_PAGE_MAX_HEIGHT = Number(process.env.SCREENSHOTONE_FULL
 const SCREENSHOTONE_SLICE_HEIGHT = Number(process.env.SCREENSHOTONE_SLICE_HEIGHT || 4000);
 const SCREENSHOTONE_USE_SLICES = process.env.SCREENSHOTONE_USE_SLICES === "true";
 const VISION_ENABLED = process.env.VISION_ENABLED !== "false";
-const BRIDGE_MAX_CONCURRENCY = Number(process.env.BRIDGE_MAX_CONCURRENCY || 2);
+const BRIDGE_MAX_CONCURRENCY = Number(process.env.BRIDGE_MAX_CONCURRENCY || 8);
 const GENERATE_MAX_CONCURRENCY = Number(process.env.GENERATE_MAX_CONCURRENCY || BRIDGE_MAX_CONCURRENCY);
-const FORMAT_MAX_CONCURRENCY = Number(process.env.FORMAT_MAX_CONCURRENCY || 4);
+const FORMAT_MAX_CONCURRENCY = Number(process.env.FORMAT_MAX_CONCURRENCY || 8);
 const PAGE_ANALYSIS_CACHE_TTL_MS = Number(process.env.PAGE_ANALYSIS_CACHE_TTL_MS || 10 * 60 * 1000);
 const RESULT_CACHE_TTL_MS = Number(process.env.RESULT_CACHE_TTL_MS || 15 * 60 * 1000);
+const COLORING_JOB_TTL_MS = Number(process.env.COLORING_JOB_TTL_MS || 30 * 60 * 1000);
+const COLORING_DAILY_LIMIT = Number(process.env.COLORING_DAILY_LIMIT || 5);
+const COLORING_DAILY_LIMIT_TZ = process.env.COLORING_DAILY_LIMIT_TZ || "Asia/Taipei";
+const DEVICE_COOKIE_NAME = process.env.DEVICE_COOKIE_NAME || "lihi_device";
+const DEVICE_COOKIE_TTL_SECONDS = Number(process.env.DEVICE_COOKIE_TTL_SECONDS || 180 * 24 * 60 * 60);
+const DEVICE_COOKIE_SECRET = process.env.DEVICE_COOKIE_SECRET || "lihi-coloring-device-secret-v1";
+const COLORING_SESSION_TTL_MS = Number(process.env.COLORING_SESSION_TTL_MS || 20 * 60 * 1000);
+const COLORING_SESSION_SECRET = process.env.COLORING_SESSION_SECRET || "lihi-coloring-session-secret-v1";
+const COLORING_IP_WINDOW_MS = Number(process.env.COLORING_IP_WINDOW_MS || 10 * 60 * 1000);
+const COLORING_IP_WINDOW_LIMIT = Number(process.env.COLORING_IP_WINDOW_LIMIT || 10);
+const COLORING_IP_BAN_THRESHOLD = Number(process.env.COLORING_IP_BAN_THRESHOLD || 8);
+const COLORING_IP_BAN_MS = Number(process.env.COLORING_IP_BAN_MS || 60 * 60 * 1000);
+const COLORING_ACTIVE_JOB_LIMIT_PER_DEVICE = Number(process.env.COLORING_ACTIVE_JOB_LIMIT_PER_DEVICE || 1);
 const CACHE_MAX_ENTRIES = Number(process.env.CACHE_MAX_ENTRIES || 200);
 
 const generateQueue = createTaskQueue(GENERATE_MAX_CONCURRENCY);
@@ -107,6 +131,12 @@ const formatResultCache = new Map();
 const inflightPageAnalysis = new Map();
 const inflightGenerateRequests = new Map();
 const inflightFormatRequests = new Map();
+const inflightColoringRequests = new Map();
+const coloringJobs = new Map();
+const coloringDailyUsage = new Map();
+const coloringIpUsage = new Map();
+const coloringIpBlocks = new Map();
+const activeColoringJobsByDevice = new Map();
 const TAIWAN_COMPLIANCE_FORBIDDEN_RULES = [
   { label: "disease_name", pattern: /(糖尿病|高血壓|高血脂|脂肪肝|憂鬱症|失眠症?|骨質疏鬆|胃潰瘍|關節炎|痛風|癌症|中風|阿茲海默症)/i },
   { label: "treatment_claim", pattern: /(治療|治好|根治|預防中風|預防癌症|預防骨折|改善病情|降低血糖|降血糖|降血壓|降低膽固醇|清除血栓|溶解血栓|治療高血脂|治療高血壓|治療糖尿病|治療便秘|治療胃潰瘍|治療氣喘|治療退化性關節炎)/i },
@@ -239,7 +269,11 @@ const SIMPLIFIED_TO_TRADITIONAL_REPLACEMENTS = [
   ["台", "臺"]
 ];
 
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "25mb" }));
+app.use((req, res, next) => {
+  ensureDeviceCookie(req, res);
+  next();
+});
 app.use(express.static(publicDir));
 
 app.use((req, res, next) => {
@@ -257,8 +291,8 @@ app.use((req, res, next) => {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Vary", "Origin");
     }
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Coloring-Session");
     return res.status(204).end();
   }
 
@@ -282,11 +316,33 @@ app.get("/", (_req, res) => {
 app.get("/health", async (_req, res) => {
   res.json({
     ok: true,
-    service: "beck-copy-engine",
+    service: "lihi-coloring-card",
     mode: OPENAI_API_KEY ? "live" : "mock",
     provider: OPENAI_API_KEY ? "openai" : "none",
     model: OPENAI_API_KEY ? OPENAI_MODEL : "",
-    framework: "beck-copy-framework-v1"
+    imageModel: OPENAI_API_KEY ? COLORING_IMAGE_MODEL : "",
+    framework: "lihi-coloring-card-v1"
+  });
+});
+
+app.get("/coloring-session", (req, res) => {
+  if (!hasAuthorizedBridgeAccess(req)) {
+    return res.status(403).json({ ok: false, error: "forbidden_origin" });
+  }
+
+  const deviceId = getTrustedDeviceIdFromRequest(req);
+  if (!deviceId) {
+    return res.status(403).json({ ok: false, error: "missing_device_cookie" });
+  }
+
+  const session = createColoringSession(deviceId);
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.setHeader("Pragma", "no-cache");
+  return res.json({
+    ok: true,
+    token: session.token,
+    expiresAt: session.expiresAt,
+    dailyLimit: COLORING_DAILY_LIMIT
   });
 });
 
@@ -392,6 +448,133 @@ app.post("/format-copy", async (req, res) => {
   }
 });
 
+app.post("/generate-coloring-card", async (req, res) => {
+  if (!isAuthorized(req)) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+
+  const gate = validateColoringRequest(req, { requireSessionToken: true, enforceActiveJobLimit: true });
+  if (!gate.ok) {
+    return res.status(gate.status).json(gate.body);
+  }
+
+  const input = normalizeColoringInput(req.body);
+  const errors = validateColoringInput(input);
+
+  if (errors.length > 0) {
+    return res.status(400).json({ ok: false, error: "validation_failed", errors });
+  }
+
+  const quota = consumeColoringQuota(req);
+  if (!quota.ok) {
+    return res.status(429).json({
+      ok: false,
+      error: "daily_limit_reached",
+      message: `今天最多只能產圖 ${COLORING_DAILY_LIMIT} 次，請明天再試`,
+      remaining: 0,
+      limit: COLORING_DAILY_LIMIT
+    });
+  }
+
+  const cacheKey = crypto.createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  const activeJob = {
+    id: `sync:${crypto.randomUUID()}`,
+    deviceId: gate.context.deviceId
+  };
+  markColoringJobActive(activeJob);
+
+  try {
+    const result = await getOrCreateInflight(inflightColoringRequests, cacheKey, async () => {
+      return generateColoringResult(input);
+    });
+
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
+    return res.json(result);
+  } catch (error) {
+    return res.status(502).json({
+      ok: false,
+      error: "coloring_generation_failed",
+      message: formatError(error)
+    });
+  } finally {
+    unmarkColoringJobActive(activeJob);
+  }
+});
+
+app.post("/generate-coloring-card-job", async (req, res) => {
+  if (!isAuthorized(req)) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+
+  const gate = validateColoringRequest(req, { requireSessionToken: true, enforceActiveJobLimit: true });
+  if (!gate.ok) {
+    return res.status(gate.status).json(gate.body);
+  }
+
+  const input = normalizeColoringInput(req.body);
+  const errors = validateColoringInput(input);
+
+  if (errors.length > 0) {
+    return res.status(400).json({ ok: false, error: "validation_failed", errors });
+  }
+
+  const quota = consumeColoringQuota(req);
+  if (!quota.ok) {
+    return res.status(429).json({
+      ok: false,
+      error: "daily_limit_reached",
+      message: `今天最多只能產圖 ${COLORING_DAILY_LIMIT} 次，請明天再試`,
+      remaining: 0,
+      limit: COLORING_DAILY_LIMIT
+    });
+  }
+
+  const { job, token } = createColoringJob(input, gate.context);
+  runColoringJob(job.id).catch(() => {});
+
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.setHeader("Pragma", "no-cache");
+  return res.status(202).json({
+    ok: true,
+    jobId: job.id,
+    jobToken: token,
+    status: job.status,
+    createdAt: job.createdAt,
+    expiresAt: job.expiresAt
+  });
+});
+
+app.get("/coloring-jobs/:jobId", async (req, res) => {
+  const gate = validateColoringRequest(req, {
+    requireSessionToken: true,
+    enforceActiveJobLimit: false,
+    consumeIpLimit: false
+  });
+  if (!gate.ok) {
+    return res.status(gate.status).json(gate.body);
+  }
+
+  const jobId = String(req.params?.jobId || "").trim();
+  const token = String(req.query?.token || "").trim();
+  const job = getColoringJob(jobId);
+
+  if (!job) {
+    return res.status(404).json({ ok: false, error: "job_not_found" });
+  }
+
+  if (!verifyColoringJobAccess(job, token)) {
+    return res.status(403).json({ ok: false, error: "forbidden_job_access" });
+  }
+
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.setHeader("Pragma", "no-cache");
+  return res.json({
+    ok: true,
+    job: serializeColoringJob(job)
+  });
+});
+
 function isAuthorized(req) {
   if (!BRIDGE_API_KEY) {
     return true;
@@ -402,7 +585,831 @@ function isAuthorized(req) {
 }
 
 function isProtectedEndpoint(pathname) {
-  return pathname === "/generate-copy" || pathname === "/format-copy";
+  return (
+    pathname === "/generate-copy" ||
+    pathname === "/format-copy" ||
+    pathname === "/generate-coloring-card" ||
+    pathname === "/generate-coloring-card-job" ||
+    pathname.startsWith("/coloring-jobs/")
+  );
+}
+
+function normalizeColoringInput(body = {}) {
+  const requestedModel = String(body?.model || "").trim();
+  const model = normalizeColoringModel(requestedModel);
+  const photoDataUrls = Array.isArray(body?.photoDataUrls)
+    ? body.photoDataUrls.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const fallbackPhotoDataUrl = String(body?.photoDataUrl || "").trim();
+
+  return {
+    photoDataUrls: photoDataUrls.length > 0 ? photoDataUrls : (fallbackPhotoDataUrl ? [fallbackPhotoDataUrl] : []),
+    model,
+    quality: normalizeColoringQuality(model, body?.quality)
+  };
+}
+
+function normalizeColoringModel(value) {
+  return Object.prototype.hasOwnProperty.call(COLORING_ALLOWED_MODEL_QUALITIES, value)
+    ? value
+    : COLORING_IMAGE_MODEL;
+}
+
+function normalizeColoringQuality(model, value) {
+  const allowedQualities = COLORING_ALLOWED_MODEL_QUALITIES[model] || [COLORING_IMAGE_QUALITY];
+  const normalized = String(value || "").trim().toLowerCase();
+  return allowedQualities.includes(normalized) ? normalized : allowedQualities[0];
+}
+
+function validateColoringInput(input) {
+  const errors = [];
+
+  if (!Array.isArray(input.photoDataUrls) || input.photoDataUrls.length === 0) {
+    errors.push("請先上傳照片");
+  } else if (input.photoDataUrls.length > 3) {
+    errors.push("一次最多只能上傳 3 張照片");
+  } else {
+    for (const photoDataUrl of input.photoDataUrls) {
+      const parsed = parseImageDataUrl(photoDataUrl);
+      if (!parsed) {
+        errors.push("照片格式不正確，請重新上傳 JPG、PNG 或 WebP");
+        break;
+      }
+
+      const approxBytes = Math.floor((parsed.base64.length * 3) / 4);
+      if (approxBytes > 5 * 1024 * 1024) {
+        errors.push("照片太大，請壓到 5MB 以下再試");
+        break;
+      }
+    }
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(COLORING_ALLOWED_MODEL_QUALITIES, input.model)) {
+    errors.push("model 不在這次測試範圍內");
+  } else if (!COLORING_ALLOWED_MODEL_QUALITIES[input.model].includes(input.quality)) {
+    errors.push("quality 與 model 組合不在這次測試範圍內");
+  }
+
+  return errors;
+}
+
+async function generateColoringResult(input) {
+  return generateQueue(async () => {
+    const prompt = buildColoringPrompt(input);
+
+    if (!OPENAI_API_KEY) {
+      const outputs = input.photoDataUrls.map((photoDataUrl) => createMockColoringCard({ ...input, photoDataUrl }));
+      return {
+        ok: true,
+        mode: "mock",
+        provider: "fallback",
+        model: "",
+        imageModel: "",
+        costUsd: null,
+        prompt,
+        outputs,
+        output: outputs[0] || null
+      };
+    }
+
+    const outputs = await Promise.all(
+      input.photoDataUrls.map((photoDataUrl) => generateColoringCardFromModel({ ...input, photoDataUrl }, prompt))
+    );
+
+    return {
+      ok: true,
+      mode: "live",
+      provider: "openai",
+      model: OPENAI_MODEL,
+      imageModel: input.model,
+      costUsd: sumColoringCosts(outputs),
+      prompt,
+      outputs,
+      output: outputs[0] || null
+    };
+  });
+}
+
+function createColoringJob(input, context = {}) {
+  pruneExpiredColoringJobs();
+
+  const id = crypto.randomUUID();
+  const token = crypto.randomBytes(18).toString("base64url");
+  const now = Date.now();
+  const job = {
+    id,
+    tokenHash: createColoringJobTokenHash(token),
+    status: "queued",
+    input,
+    deviceId: String(context.deviceId || "").trim(),
+    requestIp: String(context.ip || "").trim(),
+    result: null,
+    error: "",
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now + COLORING_JOB_TTL_MS
+  };
+
+  coloringJobs.set(id, job);
+  markColoringJobActive(job);
+  pruneCache(coloringJobs, CACHE_MAX_ENTRIES);
+
+  return { job, token };
+}
+
+function getColoringJob(jobId) {
+  pruneExpiredColoringJobs();
+
+  if (!jobId) {
+    return null;
+  }
+
+  const job = coloringJobs.get(jobId);
+  if (!job) {
+    return null;
+  }
+
+  if (job.expiresAt <= Date.now()) {
+    unmarkColoringJobActive(job);
+    coloringJobs.delete(jobId);
+    return null;
+  }
+
+  return job;
+}
+
+function pruneExpiredColoringJobs() {
+  const now = Date.now();
+  for (const [jobId, job] of coloringJobs.entries()) {
+    if (!job || job.expiresAt <= now) {
+      unmarkColoringJobActive(job);
+      coloringJobs.delete(jobId);
+    }
+  }
+}
+
+function touchColoringJob(job) {
+  if (!job) {
+    return;
+  }
+
+  job.updatedAt = Date.now();
+  job.expiresAt = job.updatedAt + COLORING_JOB_TTL_MS;
+}
+
+function createColoringJobTokenHash(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function verifyColoringJobAccess(job, token) {
+  if (!job || !token) {
+    return false;
+  }
+
+  return job.tokenHash === createColoringJobTokenHash(token);
+}
+
+function serializeColoringJob(job) {
+  return {
+    id: job.id,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    expiresAt: job.expiresAt,
+    error: job.error || "",
+    result: job.result
+  };
+}
+
+async function runColoringJob(jobId) {
+  const job = getColoringJob(jobId);
+  if (!job || job.status !== "queued") {
+    return;
+  }
+
+  job.status = "running";
+  touchColoringJob(job);
+
+  try {
+    job.result = await generateColoringResult(job.input);
+    job.status = "succeeded";
+    job.error = "";
+  } catch (error) {
+    job.result = null;
+    job.status = "failed";
+    job.error = formatError(error);
+  } finally {
+    unmarkColoringJobActive(job);
+    touchColoringJob(job);
+  }
+}
+
+function parseImageDataUrl(value) {
+  const match = String(value || "").match(/^data:(image\/(?:png|jpeg|webp));base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    mediaType: match[1].toLowerCase(),
+    base64: match[2].replace(/\s+/g, "")
+  };
+}
+
+function buildColoringPrompt(input) {
+  return [
+    "Turn this photo into a clean black-and-white coloring page for kids.",
+    "Re-draw the photo as polished coloring-book line art, not a direct photo trace.",
+    "Keep the main subject recognizable and preserve important facial features, expression, pose, and key details.",
+    "Use slightly simpler subject detail than a highly detailed coloring page, keeping the subject clear but not too intricate inside.",
+    "Keep some background elements so the page still feels like a scene, especially larger shapes and recognizable environment details, but simplify them into clean, colorable forms.",
+    "Remove tiny textures, visual noise, and unnecessary micro-details from both subject and background.",
+    "Style: clean cartoon line art, white background, thick clear outlines, simple interior details, easy for children to color.",
+    "Do not use gray shading, color, messy textures, crosshatching, sketchy tracing, noisy tracing, realistic lighting gradients, or halftone noise.",
+    "The result should look like a professional printable coloring page made from a real-life family photo, pet photo, toy photo, or everyday moment."
+  ].join(" ");
+}
+
+function createMockColoringCard(input) {
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">
+  <rect width="1200" height="1600" fill="#ffffff"/>
+  <rect x="72" y="72" width="1056" height="1456" rx="48" fill="#ffffff" stroke="#111111" stroke-width="10"/>
+  <text x="120" y="180" font-size="44" font-family="Arial, sans-serif" fill="#111111">Coloring Card Preview</text>
+  <text x="120" y="236" font-size="22" font-family="Arial, sans-serif" fill="#444444">Balanced printable outline preview</text>
+  <ellipse cx="600" cy="720" rx="250" ry="310" fill="none" stroke="#111111" stroke-width="18"/>
+  <circle cx="520" cy="650" r="20" fill="none" stroke="#111111" stroke-width="10"/>
+  <circle cx="680" cy="650" r="20" fill="none" stroke="#111111" stroke-width="10"/>
+  <path d="M 490 820 Q 600 900 710 820" fill="none" stroke="#111111" stroke-width="14" stroke-linecap="round"/>
+  <path d="M 360 1060 Q 600 1180 840 1060" fill="none" stroke="#111111" stroke-width="18" stroke-linecap="round"/>
+  <text x="120" y="1390" font-size="28" font-family="Arial, sans-serif" fill="#111111">Clean printable line art mock preview</text>
+  <text x="120" y="1450" font-size="22" font-family="Arial, sans-serif" fill="#777777">Mock preview when OPENAI_API_KEY is not configured.</text>
+</svg>`;
+
+  return {
+    imageDataUrl: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    mediaType: "image/svg+xml",
+    usage: null,
+    costUsd: null
+  };
+}
+
+async function generateColoringCardFromModel(input, prompt) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), COLORING_IMAGE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(IMAGE_API_BASE_URL, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "HTTP-Referer": APP_PUBLIC_URL,
+        "X-Title": "Lihi Coloring Card"
+      },
+      body: JSON.stringify({
+        model: input.model,
+        prompt,
+        input_references: [
+          {
+            type: "image_url",
+            image_url: {
+              url: input.photoDataUrl
+            }
+          }
+        ],
+        aspect_ratio: COLORING_IMAGE_ASPECT_RATIO,
+        quality: input.quality,
+        output_format: "png",
+        background: "opaque",
+        n: 1
+      })
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result?.error?.message || `著色圖生成失敗 (${response.status})`);
+    }
+
+    const firstImage = result?.data?.[0];
+    if (!firstImage?.b64_json) {
+      throw new Error("模型沒有回傳圖片");
+    }
+
+    const mediaType = typeof firstImage.media_type === "string" ? firstImage.media_type : "image/png";
+    const usage = result?.usage || null;
+    return {
+      imageDataUrl: `data:${mediaType};base64,${firstImage.b64_json}`,
+      mediaType,
+      usage,
+      costUsd: extractColoringCostUsd(usage)
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractColoringCostUsd(usage) {
+  const directCost = coerceFiniteNumber(
+    usage?.cost_usd ?? usage?.costUsd ?? usage?.cost ?? usage?.total_cost ?? usage?.totalCost
+  );
+  if (directCost !== null) {
+    return directCost;
+  }
+
+  const inputTokens = coerceFiniteNumber(usage?.input_tokens ?? usage?.prompt_tokens ?? usage?.inputTokens);
+  const outputTokens = coerceFiniteNumber(usage?.output_tokens ?? usage?.completion_tokens ?? usage?.outputTokens);
+
+  if (inputTokens === null && outputTokens === null) {
+    return null;
+  }
+
+  const estimatedInputCost = ((inputTokens || 0) / 1000000) * COLORING_IMAGE_INPUT_PRICE_PER_MILLION;
+  const estimatedOutputCost = ((outputTokens || 0) / 1000000) * COLORING_IMAGE_OUTPUT_PRICE_PER_MILLION;
+  return Number((estimatedInputCost + estimatedOutputCost).toFixed(6));
+}
+
+function sumColoringCosts(outputs) {
+  const numericCosts = outputs
+    .map((output) => coerceFiniteNumber(output?.costUsd))
+    .filter((value) => value !== null);
+
+  if (numericCosts.length === 0) {
+    return null;
+  }
+
+  return Number(numericCosts.reduce((sum, value) => sum + value, 0).toFixed(6));
+}
+
+function coerceFiniteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function ensureDeviceCookie(req, res) {
+  const existingDeviceId = getTrustedDeviceIdFromRequest(req);
+  if (existingDeviceId) {
+    return existingDeviceId;
+  }
+
+  const deviceId = crypto.randomUUID();
+  const signedValue = signDeviceCookieValue(deviceId);
+  res.append("Set-Cookie", buildDeviceCookieHeader(signedValue));
+  return deviceId;
+}
+
+function getTrustedDeviceIdFromRequest(req) {
+  const cookies = parseCookieHeader(req.get("cookie") || "");
+  const signedValue = cookies[DEVICE_COOKIE_NAME];
+  if (!signedValue) {
+    return "";
+  }
+
+  return verifyDeviceCookieValue(signedValue);
+}
+
+function parseCookieHeader(cookieHeader) {
+  return String(cookieHeader || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, pair) => {
+      const separatorIndex = pair.indexOf("=");
+      if (separatorIndex <= 0) {
+        return acc;
+      }
+
+      const key = pair.slice(0, separatorIndex).trim();
+      const value = pair.slice(separatorIndex + 1).trim();
+      if (!key) {
+        return acc;
+      }
+
+      try {
+        acc[key] = decodeURIComponent(value);
+      } catch {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+}
+
+function signDeviceCookieValue(deviceId) {
+  const normalizedDeviceId = String(deviceId || "").trim();
+  const signature = crypto
+    .createHmac("sha256", DEVICE_COOKIE_SECRET)
+    .update(normalizedDeviceId)
+    .digest("base64url");
+  return `${normalizedDeviceId}.${signature}`;
+}
+
+function verifyDeviceCookieValue(value) {
+  const raw = String(value || "");
+  const separatorIndex = raw.lastIndexOf(".");
+  if (separatorIndex <= 0) {
+    return "";
+  }
+
+  const deviceId = raw.slice(0, separatorIndex).trim();
+  const signature = raw.slice(separatorIndex + 1).trim();
+  if (!deviceId || !signature) {
+    return "";
+  }
+
+  const expected = signDeviceCookieValue(deviceId);
+  const expectedSignature = expected.slice(expected.lastIndexOf(".") + 1);
+  if (signature.length !== expectedSignature.length) {
+    return "";
+  }
+
+  try {
+    if (
+      crypto.timingSafeEqual(
+        Buffer.from(signature, "utf8"),
+        Buffer.from(expectedSignature, "utf8")
+      )
+    ) {
+      return deviceId;
+    }
+  } catch {}
+
+  return "";
+}
+
+function buildDeviceCookieHeader(signedValue) {
+  const parts = [
+    `${DEVICE_COOKIE_NAME}=${encodeURIComponent(signedValue)}`,
+    "Path=/",
+    `Max-Age=${DEVICE_COOKIE_TTL_SECONDS}`,
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax"
+  ];
+  return parts.join("; ");
+}
+
+function createColoringSession(deviceId) {
+  const normalizedDeviceId = String(deviceId || "").trim();
+  const expiresAt = Date.now() + COLORING_SESSION_TTL_MS;
+  const nonce = crypto.randomBytes(8).toString("base64url");
+  const payload = `${normalizedDeviceId}.${expiresAt}.${nonce}`;
+  const signature = crypto
+    .createHmac("sha256", COLORING_SESSION_SECRET)
+    .update(payload)
+    .digest("base64url");
+
+  return {
+    token: `${payload}.${signature}`,
+    expiresAt
+  };
+}
+
+function verifyColoringSessionToken(token, deviceId) {
+  const raw = String(token || "").trim();
+  const normalizedDeviceId = String(deviceId || "").trim();
+  const parts = raw.split(".");
+  if (parts.length !== 4) {
+    return false;
+  }
+
+  const [tokenDeviceId, expiresAtRaw, nonce, signature] = parts;
+  if (!tokenDeviceId || !expiresAtRaw || !nonce || !signature) {
+    return false;
+  }
+
+  if (tokenDeviceId !== normalizedDeviceId) {
+    return false;
+  }
+
+  const expiresAt = Number(expiresAtRaw);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return false;
+  }
+
+  const payload = `${tokenDeviceId}.${expiresAtRaw}.${nonce}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", COLORING_SESSION_SECRET)
+    .update(payload)
+    .digest("base64url");
+
+  if (signature.length !== expectedSignature.length) {
+    return false;
+  }
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature, "utf8"), Buffer.from(expectedSignature, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+function getColoringSessionTokenFromRequest(req) {
+  return String(req.get("x-coloring-session") || "").trim();
+}
+
+function validateColoringRequest(req, options = {}) {
+  const requireSessionToken = options.requireSessionToken !== false;
+  const enforceActiveJobLimit = options.enforceActiveJobLimit === true;
+  const consumeIpLimit = options.consumeIpLimit !== false;
+  const deviceId = getTrustedDeviceIdFromRequest(req);
+  if (!deviceId) {
+    return {
+      ok: false,
+      status: 403,
+      body: { ok: false, error: "missing_device_cookie", message: "請重新整理頁面後再試一次" }
+    };
+  }
+
+  const ip = getRequestIp(req);
+  pruneExpiredColoringAbuseState();
+  const blocked = getColoringIpBlock(ip);
+  if (blocked) {
+    return {
+      ok: false,
+      status: 429,
+      body: {
+        ok: false,
+        error: "ip_temporarily_blocked",
+        message: "這個網路來源目前請求過於頻繁，請稍後再試",
+        retryAfterSeconds: blocked.retryAfterSeconds
+      }
+    };
+  }
+
+  const suspicion = getColoringRequestSuspicionScore(req);
+  if (suspicion.score >= 3) {
+    const strikeResult = addColoringIpStrike(ip, suspicion.score);
+    return {
+      ok: false,
+      status: strikeResult.blocked ? 429 : 403,
+      body: {
+        ok: false,
+        error: strikeResult.blocked ? "ip_temporarily_blocked" : "suspicious_client",
+        message: strikeResult.blocked
+          ? "這個網路來源目前請求過於頻繁，請稍後再試"
+          : "請從 coloring.bktsai.link 正常開啟頁面後再試一次"
+      }
+    };
+  }
+
+  if (requireSessionToken) {
+    const sessionToken = getColoringSessionTokenFromRequest(req);
+    if (!verifyColoringSessionToken(sessionToken, deviceId)) {
+      addColoringIpStrike(ip, 2);
+      return {
+        ok: false,
+        status: 403,
+        body: {
+          ok: false,
+          error: "invalid_session_token",
+          message: "頁面驗證已失效，請重新整理後再試一次"
+        }
+      };
+    }
+  }
+
+  if (consumeIpLimit) {
+    const ipLimit = consumeColoringIpLimit(ip);
+    if (!ipLimit.ok) {
+      return {
+        ok: false,
+        status: 429,
+        body: {
+          ok: false,
+          error: "ip_rate_limited",
+          message: "目前這個網路來源請求太快，請稍後再試",
+          retryAfterSeconds: ipLimit.retryAfterSeconds
+        }
+      };
+    }
+  }
+
+  if (enforceActiveJobLimit && hasReachedActiveColoringJobLimit(deviceId)) {
+    addColoringIpStrike(ip, 1);
+    return {
+      ok: false,
+      status: 429,
+      body: {
+        ok: false,
+        error: "job_already_running",
+        message: "這台裝置目前已有產圖任務進行中，請等目前這批完成後再送出下一批"
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    context: {
+      deviceId,
+      ip
+    }
+  };
+}
+
+function getColoringRequestSuspicionScore(req) {
+  let score = 0;
+  const userAgent = String(req.get("user-agent") || "").trim();
+  const origin = String(req.get("origin") || "").trim();
+  const referer = String(req.get("referer") || "").trim();
+  const secFetchSite = String(req.get("sec-fetch-site") || "").trim().toLowerCase();
+  const secFetchMode = String(req.get("sec-fetch-mode") || "").trim().toLowerCase();
+
+  if (!origin && !referer) {
+    score += 2;
+  }
+
+  if (!userAgent || /(curl|wget|postman|insomnia|python|aiohttp|httpx|go-http-client|axios|node-fetch|powershell)/i.test(userAgent)) {
+    score += 2;
+  }
+
+  if (secFetchSite && secFetchSite !== "same-origin" && secFetchSite !== "same-site" && secFetchSite !== "none") {
+    score += 1;
+  }
+
+  if (secFetchMode && secFetchMode !== "cors" && secFetchMode !== "same-origin" && secFetchMode !== "navigate") {
+    score += 1;
+  }
+
+  return { score };
+}
+
+function getRequestIp(req) {
+  const forwardedFor = String(req.get("x-forwarded-for") || "").trim();
+  const rawIp = forwardedFor
+    ? forwardedFor.split(",")[0]
+    : (req.ip || req.socket?.remoteAddress || req.connection?.remoteAddress || "");
+  return normalizeIp(rawIp);
+}
+
+function normalizeIp(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) {
+    return "unknown";
+  }
+
+  if (raw.startsWith("::ffff:")) {
+    return raw.slice(7);
+  }
+
+  return raw;
+}
+
+function pruneExpiredColoringAbuseState() {
+  const now = Date.now();
+  for (const [ip, record] of coloringIpUsage.entries()) {
+    if (!record || record.resetAt <= now) {
+      coloringIpUsage.delete(ip);
+    }
+  }
+
+  for (const [ip, record] of coloringIpBlocks.entries()) {
+    if (!record || record.blockedUntil <= now) {
+      coloringIpBlocks.delete(ip);
+    }
+  }
+}
+
+function getColoringIpUsageRecord(ip) {
+  const normalizedIp = normalizeIp(ip);
+  const now = Date.now();
+  const existing = coloringIpUsage.get(normalizedIp);
+  if (existing && existing.resetAt > now) {
+    return existing;
+  }
+
+  const record = {
+    count: 0,
+    strikes: 0,
+    resetAt: now + COLORING_IP_WINDOW_MS
+  };
+  coloringIpUsage.set(normalizedIp, record);
+  return record;
+}
+
+function consumeColoringIpLimit(ip) {
+  const record = getColoringIpUsageRecord(ip);
+  record.count += 1;
+
+  if (record.count <= COLORING_IP_WINDOW_LIMIT) {
+    return { ok: true };
+  }
+
+  const strikeResult = addColoringIpStrike(ip, 1);
+  return {
+    ok: false,
+    retryAfterSeconds: Math.max(1, Math.ceil((record.resetAt - Date.now()) / 1000)),
+    blocked: strikeResult.blocked
+  };
+}
+
+function addColoringIpStrike(ip, weight = 1) {
+  const normalizedIp = normalizeIp(ip);
+  const record = getColoringIpUsageRecord(normalizedIp);
+  record.strikes += Math.max(1, Number(weight) || 1);
+
+  if (record.strikes >= COLORING_IP_BAN_THRESHOLD) {
+    const blockedUntil = Date.now() + COLORING_IP_BAN_MS;
+    coloringIpBlocks.set(normalizedIp, { blockedUntil });
+    return {
+      blocked: true,
+      retryAfterSeconds: Math.max(1, Math.ceil(COLORING_IP_BAN_MS / 1000))
+    };
+  }
+
+  return { blocked: false };
+}
+
+function getColoringIpBlock(ip) {
+  const normalizedIp = normalizeIp(ip);
+  const record = coloringIpBlocks.get(normalizedIp);
+  if (!record) {
+    return null;
+  }
+
+  if (record.blockedUntil <= Date.now()) {
+    coloringIpBlocks.delete(normalizedIp);
+    return null;
+  }
+
+  return {
+    retryAfterSeconds: Math.max(1, Math.ceil((record.blockedUntil - Date.now()) / 1000))
+  };
+}
+
+function hasReachedActiveColoringJobLimit(deviceId) {
+  const normalizedDeviceId = String(deviceId || "").trim();
+  const activeJobs = activeColoringJobsByDevice.get(normalizedDeviceId);
+  return Boolean(activeJobs && activeJobs.size >= COLORING_ACTIVE_JOB_LIMIT_PER_DEVICE);
+}
+
+function markColoringJobActive(job) {
+  const deviceId = String(job?.deviceId || "").trim();
+  if (!deviceId) {
+    return;
+  }
+
+  const activeJobs = activeColoringJobsByDevice.get(deviceId) || new Set();
+  activeJobs.add(job.id);
+  activeColoringJobsByDevice.set(deviceId, activeJobs);
+}
+
+function unmarkColoringJobActive(job) {
+  const deviceId = String(job?.deviceId || "").trim();
+  const jobId = String(job?.id || "").trim();
+  if (!deviceId || !jobId) {
+    return;
+  }
+
+  const activeJobs = activeColoringJobsByDevice.get(deviceId);
+  if (!activeJobs) {
+    return;
+  }
+
+  activeJobs.delete(jobId);
+  if (activeJobs.size === 0) {
+    activeColoringJobsByDevice.delete(deviceId);
+  }
+}
+
+function consumeColoringQuota(req) {
+  pruneExpiredColoringUsage();
+  const deviceId = getTrustedDeviceIdFromRequest(req);
+  if (!deviceId) {
+    return { ok: false, error: "missing_device_cookie" };
+  }
+
+  const dayKey = getCurrentTaipeiDayKey();
+  const usageKey = `${dayKey}:${deviceId}`;
+  const currentCount = Number(coloringDailyUsage.get(usageKey) || 0);
+  if (currentCount >= COLORING_DAILY_LIMIT) {
+    return { ok: false, remaining: 0, limit: COLORING_DAILY_LIMIT };
+  }
+
+  coloringDailyUsage.set(usageKey, currentCount + 1);
+  return {
+    ok: true,
+    remaining: Math.max(0, COLORING_DAILY_LIMIT - currentCount - 1),
+    limit: COLORING_DAILY_LIMIT
+  };
+}
+
+function pruneExpiredColoringUsage() {
+  const currentDay = getCurrentTaipeiDayKey();
+  for (const key of coloringDailyUsage.keys()) {
+    if (!String(key).startsWith(`${currentDay}:`)) {
+      coloringDailyUsage.delete(key);
+    }
+  }
+}
+
+function getCurrentTaipeiDayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: COLORING_DAILY_LIMIT_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
 }
 
 function hasAuthorizedBridgeAccess(req) {
@@ -424,6 +1431,10 @@ function hasValidBridgeApiKey(req) {
 function isTrustedLocalBrowserRequest(req) {
   const origin = getAllowedRequestOrigin(req);
   if (!origin) {
+    return false;
+  }
+
+  if (!getTrustedDeviceIdFromRequest(req)) {
     return false;
   }
 
@@ -3571,6 +4582,15 @@ function formatError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -3583,28 +4603,49 @@ if (require.main === module) {
 
 module.exports = {
   app,
+  buildColoringPrompt,
   cleanHostHeader,
+  createColoringSession,
+  consumeColoringQuota,
+  consumeColoringIpLimit,
+  createColoringJob,
+  createColoringJobTokenHash,
+  createMockColoringCard,
+  ensureDeviceCookie,
   detectTaiwanComplianceViolations,
   formatEmailOutput,
   formatGoogleAdsOutput,
   formatMetaAdOutput,
   formatPrimaryOutput,
   getAllowedRequestOrigin,
+  getColoringRequestSuspicionScore,
+  getRequestIp,
   hasAuthorizedBridgeAccess,
+  hasReachedActiveColoringJobLimit,
+  extractColoringCostUsd,
   isAllowedPublicUrl,
   isExplicitlyAllowedOrigin,
   isLoopbackHost,
+  getTrustedDeviceIdFromRequest,
   normalizeTraditionalChineseText,
   normalizeExternalUrl,
   normalizeReusableMasterDraft,
+  normalizeColoringInput,
+  parseImageDataUrl,
   parseChannelCopyOutput,
   parseMasterDraftOutput,
   parsePrimaryBundleOutput,
   resolveStylePresetKey,
   resolveSafeOutputUrl,
+  runColoringJob,
   sanitizeChannelOutputForCompliance,
   sanitizeMasterDraftForCompliance,
+  serializeColoringJob,
   stripReportLikePhrases,
   stripSourceScaffoldingPhrases,
-  summarizePageSignals
+  summarizePageSignals,
+  validateColoringRequest,
+  verifyColoringJobAccess,
+  verifyColoringSessionToken,
+  validateColoringInput
 };

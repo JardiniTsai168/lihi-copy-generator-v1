@@ -3,249 +3,150 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>廣告文案產生器 | lihi 實驗室</title>
+    <title>著色圖產生器 | lihi 實驗室</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="orb orb-a"></div>
     <div class="orb orb-b"></div>
+
     <main class="shell">
       <section class="hero">
         <div class="hero-title-row">
-          <h1 class="hero-title">廣告文案產生器 | lihi 實驗室</h1>
-          <span class="chip chip-secondary" id="mode-badge">連線檢查中</span>
+          <div class="hero-copy">
+            <div class="hero-title-inline">
+              <h1 class="hero-title">著色圖產生器 | lihi 實驗室</h1>
+            </div>
+            <p class="hero-subtitle">上傳一張溫馨的照片，給你的孩子一張有意義的著色圖。</p>
+          </div>
+          <div class="hero-meta">
+            <p class="hero-powered">
+              Powered by
+              <a href="https://lihi.io" target="_blank" rel="noreferrer">lihi.io</a>
+            </p>
+            <span class="chip chip-secondary" id="mode-badge">連線檢查中</span>
+          </div>
+        </div>
+        <div class="hero-layout">
+          <form class="panel panel-form hero-form" id="coloring-form" novalidate>
+            <label class="upload-dropzone" for="photo-input" id="upload-dropzone">
+              <input id="photo-input" name="photo" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
+              <span class="upload-label">拖拉照片到這裡，或點一下選圖</span>
+              <span class="upload-limit">一次最多可上傳 3 張</span>
+            </label>
+            <small class="error" data-error-for="photo"></small>
+
+            <div class="upload-preview is-hidden" id="upload-preview">
+              <div class="upload-preview-toolbar">
+                <button class="ghost-button upload-remove-button" type="button" id="remove-photo-button">清空照片</button>
+              </div>
+              <div class="source-preview-grid" id="source-preview-grid"></div>
+            </div>
+
+            <div class="actions">
+              <button class="primary-button" type="submit" id="submit-button">產出著色圖</button>
+              <p class="status is-hidden" id="form-status"></p>
+            </div>
+          </form>
+
+          <section class="panel panel-examples" aria-labelledby="example-title">
+            <div class="example-head">
+              <h2 id="example-title">範例</h2>
+            </div>
+
+            <div class="example-grid">
+              <figure class="example-card">
+                <figcaption class="example-caption">狗狗照片 → 著色圖</figcaption>
+                <div class="example-pair">
+                  <img
+                    class="example-image"
+                    src="./examples/small/dog1.jpg"
+                    alt="狗狗原始照片範例"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <img
+                    class="example-image"
+                    src="./examples/small/dog1_color.png"
+                    alt="狗狗著色圖範例"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              </figure>
+            </div>
+          </section>
         </div>
       </section>
 
-      <section class="grid">
-        <form class="panel panel-form" id="copy-form" novalidate>
-          <div class="panel-head">
-            <h2>輸入產品資訊</h2>
-          </div>
-
-          <div class="field-row">
-            <label class="field field-product-name">
-              <span>產品名稱</span>
-              <input id="productName" name="productName" type="text" maxlength="80" placeholder="例如：南瓜濃湯" required />
-              <small class="error" data-error-for="productName"></small>
-            </label>
-
-            <label class="field field-url-group">
-              <div class="url-builder">
-                <div class="url-input-header">
-                  <span>產品頁連結</span>
-                </div>
-                <div class="url-input-row">
-                  <input id="productUrl" name="productUrl" type="text" maxlength="300" placeholder="請輸入產品頁面連結" required />
-                  <button class="url-settings-button" type="button" id="toggle-url-settings" aria-expanded="false" aria-controls="url-settings-panel" disabled>設定網址</button>
-                </div>
-                <div class="field field-subfield url-settings-panel is-hidden" id="url-settings-panel">
-                  <span>網址設定</span>
-                  <select id="domainPreset" name="domainPreset" disabled>
-                    <option value="copy.bktsai.link" selected>copy.bktsai.link</option>
-                    <option value="lihi.io">lihi.io</option>
-                    <option value="howlihi.com">howlihi.com</option>
-                    <option value="custom">用自訂網域</option>
-                  </select>
-                </div>
-              </div>
-              <small class="error" data-error-for="productUrl"></small>
-            </label>
-          </div>
-
-          <fieldset class="fieldset">
-            <div class="benefit-grid" id="benefits-group">
-              <label class="field">
-                <span>產品優點1 (至少3個)</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="純天然食材" required />
-              </label>
-              <label class="field">
-                <span>產品優點2</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="10年熬煮經驗, 每日熬煮6小時" required />
-              </label>
-              <label class="field">
-                <span>產品優點3</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="適合 2-3 人享用" required />
-              </label>
-              <label class="field">
-                <span>產品優點4</span>
-                <input name="benefit" type="text" maxlength="60" placeholder="選填" />
-              </label>
-            </div>
-            <small class="error" data-error-for="benefits"></small>
-          </fieldset>
-
-          <label class="field">
-            <span>其他想補充的內容</span>
-            <textarea
-              id="extraContext"
-              name="extraContext"
-              rows="4"
-              maxlength="600"
-              placeholder="選填，例如品牌口吻、特別想強調的賣點、想避開的說法、目標受眾、活動背景..."
-            ></textarea>
-          </label>
-
-          <label class="field">
-            <span>風格版本</span>
-            <select id="stylePreset" name="stylePreset">
-              <option value="random" selected>隨機</option>
-              <option value="home_healing">回家療癒版</option>
-              <option value="sharing_moment">分享時刻版</option>
-              <option value="childhood_memory">童年回憶版</option>
-              <option value="premium_brand">高級品牌版</option>
-              <option value="founder_story">創辦人故事版</option>
-              <option value="social_proof">社群口碑版</option>
-              <option value="scenario_solution">場景解決方案版</option>
-              <option value="rational_comparison">理性對比版</option>
-              <option value="gift_recommendation">送禮推薦版</option>
-              <option value="urgency_conversion">限時轉單版</option>
-            </select>
-            <p class="field-note" id="style-preset-note">每次按下產出時，系統都會從 10 種風格裡隨機挑 1 種。</p>
-            <small class="error" data-error-for="stylePreset"></small>
-          </label>
-
-          <fieldset class="fieldset">
-            <legend>文案風格</legend>
-            <div class="tone-switch">
-              <label class="tone-card">
-                <input type="radio" name="tone" value="brand" checked />
-                <span>品牌型</span>
-              </label>
-              <label class="tone-card">
-                <input type="radio" name="tone" value="conversion" />
-                <span>轉單型</span>
-              </label>
-            </div>
-            <small class="error" data-error-for="tone"></small>
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <legend>感性 / 理性強度</legend>
-            <div class="voice-meter">
-              <div class="voice-meter-scale">
-                <span>感性</span>
-                <span>理性</span>
-              </div>
-              <input id="voiceBalance" name="voiceBalance" type="range" min="1" max="5" step="1" value="3" />
-              <div class="voice-meter-steps" aria-hidden="true">
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <p class="voice-meter-note" id="voice-balance-note">平衡：兼顧情境畫面與清楚價值。</p>
-            </div>
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <legend>法規模式</legend>
-            <label class="compliance-card" for="complianceMode">
-              <input id="complianceMode" name="complianceMode" type="checkbox" />
-              <span class="compliance-card-body">
-                <span class="compliance-card-title">台灣食品廣告合規模式</span>
-                <span class="compliance-card-copy">勾選後，會避開高風險與禁用詞，優先產出較符合台灣食品廣告紅線的文案。</span>
-                <span class="compliance-card-note">這是降低風險模式，不等於正式法律意見；上稿前仍建議人工審稿。</span>
-              </span>
-            </label>
-          </fieldset>
-
-          <div class="actions">
-            <button class="primary-button" type="submit" id="submit-button">產出文案</button>
-            <p class="status" id="form-status">待命中，先輸入產品資訊。</p>
-          </div>
-        </form>
+      <section class="stack">
 
         <section class="panel panel-output">
-          <div class="panel-head">
-            <h2>產出文案</h2>
+          <div class="panel-head panel-head-inline">
+            <div>
+              <h2>著色圖預覽</h2>
+            </div>
           </div>
 
-          <div class="result-tabs" id="result-tabs" role="tablist" aria-label="文案格式">
-            <button class="result-tab is-active" type="button" id="tab-primary" data-tab="primary" role="tab" aria-selected="true">主要文案</button>
-            <button class="result-tab" type="button" id="tab-meta-ad" data-tab="meta_ad" role="tab" aria-selected="false">Meta 廣告</button>
-            <button class="result-tab" type="button" id="tab-google-ads" data-tab="google_ads" role="tab" aria-selected="false">Google Ads</button>
-            <button class="result-tab" type="button" id="tab-sms" data-tab="sms" role="tab" aria-selected="false">SMS</button>
-            <button class="result-tab" type="button" id="tab-line" data-tab="line" role="tab" aria-selected="false">LINE</button>
-            <button class="result-tab" type="button" id="tab-email" data-tab="email" role="tab" aria-selected="false">Email</button>
-          </div>
-
-          <div class="output-card empty" id="result-card">
-            <div class="result-block result-block-sms is-hidden" id="result-sms-block">
-              <div class="result-head">
-                <span class="result-label sms-result-label" id="result-compact-label">SMS</span>
-                <button class="icon-copy-button" type="button" id="copy-sms-button" aria-label="複製渠道文案" disabled>
-                  <span aria-hidden="true">⧉</span>
-                </button>
+          <div class="preview-card empty" id="result-card">
+            <div class="empty-state" id="empty-state">
+              <p class="empty-copy is-hidden" id="empty-loading-message">圖片產生中，請稍候。</p>
+              <div class="loading-bar is-hidden" id="empty-loading-bar" aria-hidden="true">
+                <span class="loading-bar-track"></span>
               </div>
-              <div class="sms-combined-copy" id="result-sms-copy">
-                <p><span id="result-sms-title">尚未產出</span></p>
-                <p><span id="result-sms-body">點擊上方 tab 後，會在這裡顯示渠道文案。</span></p>
-                <p class="sms-tail">
-                  <span id="result-sms-cta">-</span>
-                  <a id="result-sms-url" href="#" target="_blank" rel="noreferrer">-</a>
-                </p>
-              </div>
-            </div>
-            <div class="result-block result-block-title">
-              <div class="result-head">
-                <span class="result-label" id="result-title-label">標題</span>
-                <button class="icon-copy-button" type="button" id="copy-title-button" aria-label="複製標題" disabled>
-                  <span aria-hidden="true">⧉</span>
-                </button>
-              </div>
-              <h3 id="result-title">尚未產出</h3>
-            </div>
-            <div class="result-block result-block-body">
-              <div class="result-head">
-                <span class="result-label" id="result-body-label">主文</span>
-                <button class="icon-copy-button" type="button" id="copy-body-button" aria-label="複製主文" disabled>
-                  <span aria-hidden="true">⧉</span>
-                </button>
-              </div>
-              <div id="result-body">送出表單後，會在這裡顯示完整廣告文案。</div>
-            </div>
-            <div class="result-block result-block-google-ads is-hidden" id="result-google-ads-block">
-              <div class="result-head">
-                <span class="result-label">Google Ads 文案</span>
-              </div>
-              <div class="google-ads-group-list" id="result-google-ads-groups"></div>
-            </div>
-            <div class="result-block result-block-description is-hidden" id="result-description-block">
-              <div class="result-head">
-                <span class="result-label" id="result-description-label">Description</span>
-                <button class="icon-copy-button" type="button" id="copy-description-button" aria-label="複製 Description" disabled>
-                  <span aria-hidden="true">⧉</span>
-                </button>
-              </div>
-              <p id="result-description">-</p>
-            </div>
-            <div class="result-row">
-              <div class="result-block result-block-cta">
-                <div class="result-head">
-                  <span class="result-label" id="result-cta-label">CTA</span>
-                  <button class="icon-copy-button" type="button" id="copy-cta-button" aria-label="複製 CTA" disabled>
-                    <span aria-hidden="true">⧉</span>
-                  </button>
+              <figure class="example-card example-card-inline" id="empty-example-card">
+                <figcaption class="example-caption">釣魚照片 → 著色圖</figcaption>
+                <div class="example-pair">
+                  <img
+                    class="example-image"
+                    src="./examples/small/fish.jpg"
+                    alt="魚與釣竿原始照片"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <img
+                    class="example-image"
+                    src="./examples/small/fish_color.png"
+                    alt="魚與釣竿著色圖"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
-                <p id="result-cta">-</p>
-              </div>
-              <div class="result-block result-block-url">
-                <div class="result-head">
-                  <span class="result-label" id="result-url-label">連結</span>
-                  <button class="icon-copy-button" type="button" id="copy-url-button" aria-label="複製連結" disabled>
-                    <span aria-hidden="true">⧉</span>
-                  </button>
-                </div>
-                <a id="result-url" href="#" target="_blank" rel="noreferrer">-</a>
-              </div>
+              </figure>
             </div>
+            <div class="result-gallery is-hidden" id="result-gallery"></div>
           </div>
         </section>
       </section>
+
+      <section class="site-meta">
+        <div class="meta-grid">
+          <div class="meta-card">
+            <span class="meta-label">生成模型</span>
+            <strong id="model-name">-</strong>
+          </div>
+          <div class="meta-card">
+            <span class="meta-label">本次費用</span>
+            <strong id="cost-name">-</strong>
+          </div>
+          <div class="meta-card">
+            <span class="meta-label">輸出模式</span>
+            <strong id="mode-name">-</strong>
+          </div>
+          <div class="meta-card">
+            <span class="meta-label">產出耗時</span>
+            <strong id="generated-at">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <footer class="site-disclaimer">
+        <p>免責聲明：我們不保留任何上傳照片，亦不對產出圖片的內容或版權負責。</p>
+        <p>利害短網址有限公司 | 2017 年成立，服務超過 5,000+ 品牌</p>
+        <p>© 2018-2026 統編 82908327</p>
+      </footer>
     </main>
-    <script src="./config.js?v=20260729a"></script>
-    <script src="./app.js?v=20260730a"></script>
+
+    <script src="./app.js"></script>
   </body>
 </html>

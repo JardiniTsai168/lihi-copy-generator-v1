@@ -5,44 +5,54 @@ const path = require("node:path");
 const modulePath = path.join(__dirname, "..", "bridge-server.js");
 
 function loadBridgeModule(env = {}) {
-  const previousKey = process.env.BRIDGE_API_KEY;
-  const previousAllowedOrigins = process.env.BRIDGE_ALLOWED_ORIGINS;
-  if (typeof env.BRIDGE_API_KEY === "string") {
-    process.env.BRIDGE_API_KEY = env.BRIDGE_API_KEY;
-  } else {
-    delete process.env.BRIDGE_API_KEY;
-  }
-
-  if (typeof env.BRIDGE_ALLOWED_ORIGINS === "string") {
-    process.env.BRIDGE_ALLOWED_ORIGINS = env.BRIDGE_ALLOWED_ORIGINS;
-  } else {
-    delete process.env.BRIDGE_ALLOWED_ORIGINS;
+  const previousEnv = new Map();
+  for (const [key, value] of Object.entries(env)) {
+    previousEnv.set(key, process.env[key]);
+    if (typeof value === "string") {
+      process.env[key] = value;
+    } else {
+      delete process.env[key];
+    }
   }
 
   delete require.cache[require.resolve(modulePath)];
   const bridge = require(modulePath);
 
-  if (typeof previousKey === "string") {
-    process.env.BRIDGE_API_KEY = previousKey;
-  } else {
-    delete process.env.BRIDGE_API_KEY;
-  }
-
-  if (typeof previousAllowedOrigins === "string") {
-    process.env.BRIDGE_ALLOWED_ORIGINS = previousAllowedOrigins;
-  } else {
-    delete process.env.BRIDGE_ALLOWED_ORIGINS;
+  for (const [key, value] of previousEnv.entries()) {
+    if (typeof value === "string") {
+      process.env[key] = value;
+    } else {
+      delete process.env[key];
+    }
   }
 
   return bridge;
 }
 
-function createRequest(headers = {}) {
+function createRequest(headers = {}, extras = {}) {
   return {
+    ...extras,
     get(name) {
       return headers[String(name || "").toLowerCase()] || "";
     }
   };
+}
+
+function createResponse() {
+  return {
+    headers: [],
+    append(name, value) {
+      this.headers.push([name, value]);
+    }
+  };
+}
+
+function issueDeviceCookieForBridge(bridge) {
+  const req = createRequest();
+  const res = createResponse();
+  const deviceId = bridge.ensureDeviceCookie(req, res);
+  const cookieValue = res.headers[0]?.[1]?.match(/^lihi_device=([^;]+)/)?.[1] || "";
+  return { deviceId, cookieHeader: `lihi_device=${cookieValue}` };
 }
 
 test("bridge denies forged same-origin requests when API key is configured", () => {
@@ -58,9 +68,11 @@ test("bridge denies forged same-origin requests when API key is configured", () 
 
 test("bridge allows local browser requests when API key is not configured", () => {
   const bridge = loadBridgeModule();
+  const { cookieHeader } = issueDeviceCookieForBridge(bridge);
   const req = createRequest({
     host: "localhost:3456",
-    origin: "https://localhost:3456"
+    origin: "https://localhost:3456",
+    cookie: cookieHeader
   });
 
   assert.equal(bridge.hasAuthorizedBridgeAccess(req), true);
@@ -70,13 +82,254 @@ test("bridge allows explicitly configured public origins when API key is not con
   const bridge = loadBridgeModule({
     BRIDGE_ALLOWED_ORIGINS: "https://copy.bktsai.link"
   });
+  const { cookieHeader } = issueDeviceCookieForBridge(bridge);
   const req = createRequest({
     host: "copy.bktsai.link",
     "x-forwarded-host": "copy.bktsai.link",
-    origin: "https://copy.bktsai.link"
+    origin: "https://copy.bktsai.link",
+    cookie: cookieHeader
   });
 
   assert.equal(bridge.hasAuthorizedBridgeAccess(req), true);
+});
+
+test("validateColoringInput accepts a compact jpeg data url", () => {
+  const bridge = loadBridgeModule();
+  const errors = bridge.validateColoringInput({
+    photoDataUrls: ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"],
+    model: "openai/gpt-5.4-image-2",
+    quality: "low"
+  });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateColoringInput rejects unsupported data urls", () => {
+  const bridge = loadBridgeModule();
+  const errors = bridge.validateColoringInput({
+    photoDataUrls: ["data:text/plain;base64,SGVsbG8="]
+  });
+
+  assert.equal(errors.includes("照片格式不正確，請重新上傳 JPG、PNG 或 WebP"), true);
+});
+
+test("normalizeColoringInput keeps supported model quality combinations", () => {
+  const bridge = loadBridgeModule();
+  const input = bridge.normalizeColoringInput({
+    photoDataUrls: [
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/",
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"
+    ],
+    model: "openai/gpt-5.4-image-2",
+    quality: "low"
+  });
+
+  assert.equal(input.photoDataUrls.length, 2);
+  assert.equal(input.model, "openai/gpt-5.4-image-2");
+  assert.equal(input.quality, "low");
+});
+
+test("validateColoringInput rejects unsupported model quality combinations", () => {
+  const bridge = loadBridgeModule();
+  const errors = bridge.validateColoringInput({
+    photoDataUrls: ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"],
+    model: "openai/gpt-5.4-image-2",
+    quality: "medium"
+  });
+
+  assert.equal(errors.includes("quality 與 model 組合不在這次測試範圍內"), true);
+});
+
+test("validateColoringInput rejects more than three uploaded photos", () => {
+  const bridge = loadBridgeModule();
+  const errors = bridge.validateColoringInput({
+    photoDataUrls: [
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/",
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/",
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/",
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"
+    ],
+    model: "openai/gpt-5.4-image-2",
+    quality: "low"
+  });
+
+  assert.equal(errors.includes("一次最多只能上傳 3 張照片"), true);
+});
+
+test("createColoringJob returns a token that can access only its own job", () => {
+  const bridge = loadBridgeModule();
+  const { job, token } = bridge.createColoringJob({
+    photoDataUrls: ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"],
+    model: "openai/gpt-5.4-image-2",
+    quality: "low"
+  });
+
+  assert.equal(typeof job.id, "string");
+  assert.equal(typeof token, "string");
+  assert.equal(job.status, "queued");
+  assert.equal(bridge.verifyColoringJobAccess(job, token), true);
+  assert.equal(bridge.verifyColoringJobAccess(job, `${token}-bad`), false);
+});
+
+test("ensureDeviceCookie issues a signed cookie and request can read it back", () => {
+  const bridge = loadBridgeModule();
+  const req = createRequest();
+  const res = createResponse();
+  const deviceId = bridge.ensureDeviceCookie(req, res);
+
+  assert.equal(typeof deviceId, "string");
+  assert.equal(res.headers.length, 1);
+
+  const cookieHeader = res.headers[0][1];
+  const cookieValue = cookieHeader.match(/^lihi_device=([^;]+)/)?.[1];
+  assert.equal(Boolean(cookieValue), true);
+
+  const reqWithCookie = createRequest({
+    cookie: `lihi_device=${cookieValue}`
+  });
+  assert.equal(bridge.getTrustedDeviceIdFromRequest(reqWithCookie), deviceId);
+});
+
+test("consumeColoringQuota caps one device at five generations per day", () => {
+  const bridge = loadBridgeModule();
+  const issueReq = createRequest();
+  const res = createResponse();
+  bridge.ensureDeviceCookie(issueReq, res);
+  const cookieValue = res.headers[0][1].match(/^lihi_device=([^;]+)/)?.[1];
+  const req = createRequest({
+    cookie: `lihi_device=${cookieValue}`
+  });
+
+  for (let index = 0; index < 5; index += 1) {
+    assert.equal(bridge.consumeColoringQuota(req).ok, true);
+  }
+
+  const blocked = bridge.consumeColoringQuota(req);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.remaining, 0);
+});
+
+test("coloring session token is bound to the issuing device", () => {
+  const bridge = loadBridgeModule({ COLORING_SESSION_TTL_MS: "60000" });
+  const { deviceId } = issueDeviceCookieForBridge(bridge);
+  const session = bridge.createColoringSession(deviceId);
+
+  assert.equal(bridge.verifyColoringSessionToken(session.token, deviceId), true);
+  assert.equal(bridge.verifyColoringSessionToken(session.token, `${deviceId}-other`), false);
+});
+
+test("validateColoringRequest allows a normal browser request with a valid session token", () => {
+  const bridge = loadBridgeModule();
+  const { deviceId, cookieHeader } = issueDeviceCookieForBridge(bridge);
+  const session = bridge.createColoringSession(deviceId);
+  const req = createRequest({
+    cookie: cookieHeader,
+    origin: "https://coloring.bktsai.link",
+    referer: "https://coloring.bktsai.link/",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    "x-coloring-session": session.token
+  });
+
+  const result = bridge.validateColoringRequest(req, {
+    requireSessionToken: true,
+    enforceActiveJobLimit: false
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.context.deviceId, deviceId);
+});
+
+test("consumeColoringIpLimit blocks requests above the configured window", () => {
+  const bridge = loadBridgeModule({ COLORING_IP_WINDOW_LIMIT: "2" });
+
+  assert.equal(bridge.consumeColoringIpLimit("203.0.113.10").ok, true);
+  assert.equal(bridge.consumeColoringIpLimit("203.0.113.10").ok, true);
+
+  const blocked = bridge.consumeColoringIpLimit("203.0.113.10");
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.retryAfterSeconds > 0, true);
+});
+
+test("validateColoringRequest blocks a second active job for the same device", () => {
+  const bridge = loadBridgeModule();
+  const { deviceId, cookieHeader } = issueDeviceCookieForBridge(bridge);
+  const session = bridge.createColoringSession(deviceId);
+  bridge.createColoringJob(
+    {
+      photoDataUrls: ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"],
+      model: "openai/gpt-5.4-image-2",
+      quality: "low"
+    },
+    { deviceId, ip: "203.0.113.5" }
+  );
+
+  const req = createRequest({
+    cookie: cookieHeader,
+    origin: "https://coloring.bktsai.link",
+    referer: "https://coloring.bktsai.link/",
+    "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+    "x-coloring-session": session.token
+  });
+  const result = bridge.validateColoringRequest(req, {
+    requireSessionToken: true,
+    enforceActiveJobLimit: true,
+    consumeIpLimit: false
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 429);
+  assert.equal(result.body.error, "job_already_running");
+});
+
+test("getColoringRequestSuspicionScore flags obvious script traffic", () => {
+  const bridge = loadBridgeModule();
+  const score = bridge.getColoringRequestSuspicionScore(
+    createRequest({ "user-agent": "curl/8.0.1" })
+  );
+
+  assert.equal(score.score >= 4, true);
+});
+
+test("serializeColoringJob omits token hash and input payload", () => {
+  const bridge = loadBridgeModule();
+  const { job } = bridge.createColoringJob({
+    photoDataUrls: ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"],
+    model: "openai/gpt-5.4-image-2",
+    quality: "low"
+  });
+
+  const serialized = bridge.serializeColoringJob(job);
+  assert.equal(typeof serialized.id, "string");
+  assert.equal(serialized.status, "queued");
+  assert.equal(Object.hasOwn(serialized, "tokenHash"), false);
+  assert.equal(Object.hasOwn(serialized, "input"), false);
+});
+
+test("buildColoringPrompt follows redraw-first coloring-book rules", () => {
+  const bridge = loadBridgeModule();
+  const prompt = bridge.buildColoringPrompt({});
+
+  assert.match(prompt, /Turn this photo into a clean black-and-white coloring page for kids/i);
+  assert.match(prompt, /not a direct photo trace/i);
+  assert.match(prompt, /preserve important facial features, expression, pose, and key details/i);
+  assert.match(prompt, /slightly simpler subject detail/i);
+  assert.match(prompt, /Keep some background elements so the page still feels like a scene/i);
+});
+
+test("extractColoringCostUsd prefers direct cost from usage payload", () => {
+  const bridge = loadBridgeModule();
+
+  assert.equal(bridge.extractColoringCostUsd({ cost: 0.01842 }), 0.01842);
+});
+
+test("extractColoringCostUsd estimates cost from token usage when needed", () => {
+  const bridge = loadBridgeModule();
+  const cost = bridge.extractColoringCostUsd({
+    input_tokens: 1000,
+    output_tokens: 2000
+  });
+
+  assert.equal(cost, 0.038);
 });
 
 test("resolveSafeOutputUrl rejects private URLs from model output", () => {
